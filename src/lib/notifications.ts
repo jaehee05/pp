@@ -39,23 +39,23 @@ function send(to: string, message: string, template: string) {
 export const notify = {
   enter(s: LocalStudent) {
     if (s.notify.studentEnterExit && s.phone) {
-      send(s.phone, `[PP독서실] ${s.name}님 입실했습니다.`, 'enter_student');
+      send(s.phone, `[합격공간] ${s.name}님 입실했습니다.`, 'enter_student');
     }
     if (s.notify.parentEnterExit && s.parentPhone) {
-      send(s.parentPhone, `[PP독서실] ${s.name} 학생이 입실했습니다.`, 'enter_parent');
+      send(s.parentPhone, `[합격공간] ${s.name} 학생이 입실했습니다.`, 'enter_parent');
     }
   },
   exit(s: LocalStudent) {
     if (s.notify.studentEnterExit && s.phone) {
-      send(s.phone, `[PP독서실] ${s.name}님 퇴실했습니다.`, 'exit_student');
+      send(s.phone, `[합격공간] ${s.name}님 퇴실했습니다.`, 'exit_student');
     }
     if (s.notify.parentEnterExit && s.parentPhone) {
-      send(s.parentPhone, `[PP독서실] ${s.name} 학생이 퇴실했습니다.`, 'exit_parent');
+      send(s.parentPhone, `[합격공간] ${s.name} 학생이 퇴실했습니다.`, 'exit_parent');
     }
   },
   noShow(s: LocalStudent, scheduledStart: string) {
     if (s.notify.parentLateMiss && s.parentPhone) {
-      send(s.parentPhone, `[PP독서실] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.`, 'no_show');
+      send(s.parentPhone, `[합격공간] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.`, 'no_show');
     }
   },
   recent(limit = 50): Job[] {

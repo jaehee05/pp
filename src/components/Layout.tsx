@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 const NAV = [
@@ -11,11 +12,22 @@ const NAV = [
 ];
 
 export function Layout() {
+  // /public/logo.png 가 있으면 그걸 사용, 없으면 기본 placeholder logo.svg
+  const [logoSrc, setLogoSrc] = useState('/logo.png');
   return (
     <div className="flex h-screen w-screen overflow-hidden">
       <aside className="flex w-56 flex-col border-r border-slate-200 bg-white">
-        <div className="flex h-14 items-center px-5 text-lg font-bold text-brand-600">
-          PP 독서실
+        <div className="flex h-16 items-center gap-3 border-b border-slate-100 px-4">
+          <img
+            src={logoSrc}
+            onError={() => setLogoSrc('/logo.svg')}
+            alt="합격공간"
+            className="h-9 w-9 rounded-full object-cover ring-1 ring-slate-200"
+          />
+          <div className="leading-tight">
+            <div className="text-[15px] font-bold text-slate-900">합격공간</div>
+            <div className="text-[10px] text-slate-500">관리형 독서실</div>
+          </div>
         </div>
         <nav className="flex-1 space-y-0.5 px-2 py-3">
           {NAV.map((n) => (
@@ -36,10 +48,7 @@ export function Layout() {
           ))}
         </nav>
         <div className="border-t border-slate-200 p-3">
-          <NavLink
-            to="/kiosk"
-            className="btn-secondary w-full text-xs"
-          >
+          <NavLink to="/kiosk" className="btn-secondary w-full text-xs">
             🖥️ 키오스크 모드
           </NavLink>
         </div>

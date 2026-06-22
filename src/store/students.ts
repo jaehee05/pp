@@ -43,6 +43,7 @@ export const useStudents = create<State>()(
 export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTotal'> {
   return {
     name: '',
+    gender: undefined,
     phone: '',
     parentPhone: '',
     school: '',

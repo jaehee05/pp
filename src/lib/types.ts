@@ -13,6 +13,7 @@ export const WEEKDAY_LABEL: Record<WeekdayKey, string> = {
 export interface Student {
   id: ID;
   name: string;
+  gender?: 'M' | 'F';       // 성별
   phone: string;            // 학생 연락처
   parentPhone?: string;     // 학부모 연락처
   school?: string;
@@ -39,13 +40,16 @@ export interface Student {
 }
 
 // ---------- 좌석 ----------
+// 모든 좌표/크기는 px 단위 (PICKKO 스타일).
 export interface Seat {
-  id: ID;        // 좌석 코드 (예: "A-12")
-  label: string; // 표시명
-  x: number;     // 그리드 X
-  y: number;     // 그리드 Y
-  w: number;     // width (cells)
-  h: number;     // height (cells)
+  id: ID;        // 좌석 내부 id
+  label: string; // 표시명 (좌석 번호, 예: "11")
+  tag?: string;  // 분류 라벨 — "고정석" / "관리자석" / "지정석" 등
+  x: number;     // px
+  y: number;     // px
+  w: number;     // px
+  h: number;     // px
+  z?: number;    // z-index
   type: 'seat' | 'room' | 'wall' | 'door' | 'desk' | 'label'; // 도형 종류
   rotation?: 0 | 90 | 180 | 270;
   assignedStudentId?: ID | null; // 현재 배정된 학생 (장기 배정)
@@ -54,9 +58,9 @@ export interface Seat {
 export interface SeatLayout {
   id: ID;
   name: string;        // 예: "1관 1층"
-  cols: number;
-  rows: number;
-  cellSize: number;    // px per cell
+  width: number;       // canvas px
+  height: number;      // canvas px
+  snap: number;        // 스냅 단위 (px). 보통 5 or 10.
   seats: Seat[];
   updatedAt: TS;
 }

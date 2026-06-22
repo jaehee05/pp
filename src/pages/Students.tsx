@@ -148,7 +148,14 @@ function StudentFormModal({
     >
       <div className="grid grid-cols-2 gap-3 text-sm">
         <label>이름<input className="input mt-1" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} /></label>
-        <label>연락처<input className="input mt-1" value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} /></label>
+        <label>성별
+          <select className="input mt-1" value={v.gender ?? ''} onChange={(e) => setV({ ...v, gender: (e.target.value || undefined) as 'M' | 'F' | undefined })}>
+            <option value="">선택</option>
+            <option value="M">남 ♂</option>
+            <option value="F">여 ♀</option>
+          </select>
+        </label>
+        <label className="col-span-2">연락처<input className="input mt-1" value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} /></label>
         <label>학부모 연락처<input className="input mt-1" value={v.parentPhone ?? ''} onChange={(e) => setV({ ...v, parentPhone: e.target.value })} /></label>
         <label>학교<input className="input mt-1" value={v.school ?? ''} onChange={(e) => setV({ ...v, school: e.target.value })} /></label>
         <label>학년<input className="input mt-1" value={v.grade ?? ''} onChange={(e) => setV({ ...v, grade: e.target.value })} /></label>

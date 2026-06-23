@@ -111,14 +111,18 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
       if (active && raw) {
         try {
           const v = JSON.parse(raw) as Partial<SavedLayout>;
-          if (v.width != null) setWidth(v.width);
-          if (v.height != null) setHeight(v.height);
-          if (v.snap != null) setSnap(v.snap);
-          if (v.offsetX != null) setOffsetX(v.offsetX);
-          if (v.offsetY != null) setOffsetY(v.offsetY);
-          if (v.offsetZ != null) setOffsetZ(v.offsetZ);
-          if (v.seats) setSeats(v.seats);
-          if (v.autoLabelN != null) setAutoLabelN(v.autoLabelN);
+          // 가드: 원격에 실제 좌석이 있을 때만 적용. 비어있으면 로컬 유지
+          // (빈 원격이 좌석 있는 로컬을 덮어쓰는 사고 방지).
+          if (v.seats && v.seats.length > 0) {
+            if (v.width != null) setWidth(v.width);
+            if (v.height != null) setHeight(v.height);
+            if (v.snap != null) setSnap(v.snap);
+            if (v.offsetX != null) setOffsetX(v.offsetX);
+            if (v.offsetY != null) setOffsetY(v.offsetY);
+            if (v.offsetZ != null) setOffsetZ(v.offsetZ);
+            setSeats(v.seats);
+            if (v.autoLabelN != null) setAutoLabelN(v.autoLabelN);
+          }
         } catch { /* */ }
       }
       if (active) setHydrated(true);
@@ -129,7 +133,11 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   // 변경 시 Firestore + localStorage에 저장(편집 모드에서만, 원격 로드 후).
   useEffect(() => {
     if (!hydrated || !editable) return;
-    void firestoreStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN }));
+    // 가드: 빈 배치도는 원격에 저장하지 않음(다른 origin의 좌석 덮어쓰기 방지).
+    // 로컬 캐시에는 항상 기록해 같은 브라우저에서는 빈 상태도 유지.
+    const json = JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN });
+    try { localStorage.setItem(STORE_KEY, json); } catch { /* */ }
+    if (seats.length > 0) void firestoreStorage.setItem(STORE_KEY, json);
   }, [hydrated, editable, width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
 
   const selected = useMemo(() => seats.find((s) => s.id === selectedId) ?? null, [seats, selectedId]);

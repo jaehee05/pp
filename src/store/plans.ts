@@ -18,10 +18,10 @@ interface State {
 }
 
 const DEFAULT_PLANS: LocalPlan[] = [
-  { id: 'p_1m', name: '고정석 1개월', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 30, price: 220000, active: true },
-  { id: 'p_2w', name: '고정석 2주', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 14, price: 130000, active: true },
-  { id: 'p_h40', name: '자유석 40시간권', category: 'seat', seatType: 'free', type: 'hours', hours: 40, price: 100000, active: true },
-  { id: 'p_c10', name: '자유석 10회권', category: 'seat', seatType: 'free', type: 'count', counts: 10, price: 70000, active: true },
+  { id: 'p_1d', name: '1일권', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 1, kind: '일반',
+    taxFreeAmount: 16400, taxableAmount: 0, price: 16400, active: true },
+  { id: 'p_1m_basic', name: '1개월 기본', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 30, kind: '일반',
+    taxFreeAmount: 169670, taxableAmount: 320330, price: 490000, active: true, discountPolicy: '분두 비원생 정상가 (0%)' },
 ];
 
 export const usePlans = create<State>()(

@@ -71,14 +71,23 @@ export interface SeatLayout {
 // ---------- 이용권/결제 ----------
 export interface Plan {
   id: ID;
-  name: string;        // 예: "정기권 1개월", "4시간권"
+  name: string;                 // 예: "정기권 1개월", "4시간권"
   category: 'seat' | 'room';    // 좌석권 / 룸·사물함권
   seatType?: 'fixed' | 'free';  // 좌석권일 때만: 고정석/자유석
   type: 'period' | 'hours' | 'count'; // 기간제 / 시간제 / 회차제
   durationDays?: number;
   hours?: number;
   counts?: number;
-  price: number;
+
+  // 금액 (과세/비과세 분리. price = taxFree + taxable)
+  taxFreeAmount: number;        // 면세금액
+  taxableAmount: number;        // 과세금액
+  price: number;                // 합계금액 (저장 시 자동 계산)
+
+  kind?: string;                // 회원 구분 (일반/학생/성인 등)
+  discountPolicy?: string;      // 할인정책 라벨 (예: "분두 1과목 할인(5%)")
+  includesLocker?: boolean;     // 사물함 포함 여부
+
   active: boolean;
   hidden?: boolean;             // 숨김(노출 안 함)
   description?: string;

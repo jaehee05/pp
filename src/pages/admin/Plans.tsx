@@ -5,6 +5,23 @@ import { usePlans } from '../../store/plans';
 import type { Plan } from '../../lib/types';
 import { fmtMoney } from '../../lib/format';
 
+function periodLabel(p: Plan): string {
+  if (p.type === 'period' && p.durationDays != null) {
+    if (p.durationDays === 1) return '1일';
+    if (p.durationDays === 7) return '1주';
+    if (p.durationDays === 14) return '2주';
+    if (p.durationDays === 30) return '1개월';
+    if (p.durationDays === 60) return '2개월';
+    if (p.durationDays === 90) return '3개월';
+    if (p.durationDays === 180) return '6개월';
+    if (p.durationDays === 365) return '1년';
+    return `${p.durationDays}일`;
+  }
+  if (p.type === 'hours') return `${p.hours}시간`;
+  if (p.type === 'count') return `${p.counts}회`;
+  return '-';
+}
+
 export function PlansPage({ category }: { category: 'seat' | 'room' }) {
   const all = usePlans((s) => s.plans);
   const upsert = usePlans((s) => s.upsertPlan);
@@ -12,7 +29,6 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
 
   const list = useMemo(() => all.filter((p) => p.category === category), [all, category]);
   const [editing, setEditing] = useState<Plan | null>(null);
-  const [showHidden, setShowHidden] = useState(false);
 
   function newPlan() {
     setEditing({
@@ -20,79 +36,92 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
       name: '',
       category,
       seatType: category === 'seat' ? 'fixed' : undefined,
+      kind: '일반',
       type: 'period',
       durationDays: 30,
+      taxFreeAmount: 0,
+      taxableAmount: 0,
       price: 0,
       active: true,
       hidden: false,
+      includesLocker: false,
     });
   }
 
-  const visible = showHidden ? list : list.filter((p) => !p.hidden);
+  function toggleHide(p: Plan) {
+    upsert({ ...p, hidden: !p.hidden });
+  }
 
   return (
     <>
       <PageHeader
         title={category === 'seat' ? '좌석 이용권 관리' : '룸/사물함 이용권 관리'}
-        desc="이용권을 추가·수정·삭제하고, 가격·기간·노출 여부를 관리합니다."
-        actions={
-          <>
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              <input type="checkbox" className="accent-brand-600" checked={showHidden}
-                onChange={(e) => setShowHidden(e.target.checked)} />
-              숨김 포함
-            </label>
-            <button className="btn-primary" onClick={newPlan}>+ 이용권 추가</button>
-          </>
-        }
+        desc="과세/비과세 분리, 할인정책, 사물함 포함 여부 등을 관리합니다."
+        actions={<button className="btn-primary" onClick={newPlan}>+ 이용권 추가</button>}
       />
 
       <div className="p-6">
-        <div className="card overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="card overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-sm">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
-                <th className="px-3 py-2 text-left">이름</th>
-                {category === 'seat' && <th className="px-3 py-2 text-center">좌석타입</th>}
-                <th className="px-3 py-2 text-center">유형</th>
-                <th className="px-3 py-2 text-center">기간/시간/회차</th>
-                <th className="px-3 py-2 text-right">가격</th>
-                <th className="px-3 py-2 text-center">활성</th>
-                <th className="px-3 py-2 text-center">숨김</th>
-                <th className="px-3 py-2 text-right">동작</th>
+                <th className="px-3 py-2 text-center">NO</th>
+                <th className="px-3 py-2 text-left">기간</th>
+                <th className="px-3 py-2 text-left">구분</th>
+                {category === 'seat' && <th className="px-3 py-2 text-left">좌석</th>}
+                <th className="px-3 py-2 text-right">면세금액</th>
+                <th className="px-3 py-2 text-right">과세금액</th>
+                <th className="px-3 py-2 text-right">합계금액</th>
+                <th className="px-3 py-2 text-left">설명</th>
+                <th className="px-3 py-2 text-left">할인정책</th>
+                <th className="px-3 py-2 text-center">사물함</th>
+                <th className="px-3 py-2 text-right">관리</th>
               </tr>
             </thead>
             <tbody>
-              {visible.length === 0 && (
-                <tr><td colSpan={8} className="px-3 py-10 text-center text-slate-400">등록된 이용권이 없습니다.</td></tr>
+              {list.length === 0 && (
+                <tr><td colSpan={11} className="px-3 py-10 text-center text-slate-400">등록된 이용권이 없습니다.</td></tr>
               )}
-              {visible.map((p) => (
-                <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2 font-medium">{p.name}</td>
-                  {category === 'seat' && (
-                    <td className="px-3 py-2 text-center text-xs">
-                      <span className={`rounded px-2 py-0.5 ${p.seatType === 'fixed' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'}`}>
-                        {p.seatType === 'fixed' ? '고정석' : '자유석'}
-                      </span>
+              {list.map((p, i) => {
+                const hidden = !!p.hidden;
+                const rowCls = hidden ? 'text-slate-400 line-through' : '';
+                return (
+                  <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
+                    <td className={`px-3 py-2 text-center text-slate-500 ${rowCls}`}>{i + 1}</td>
+                    <td className={`px-3 py-2 ${rowCls}`}>{periodLabel(p)}</td>
+                    <td className={`px-3 py-2 ${rowCls}`}>{p.kind ?? '일반'}</td>
+                    {category === 'seat' && (
+                      <td className={`px-3 py-2 ${rowCls}`}>
+                        <span className={`rounded px-2 py-0.5 text-xs ${
+                          hidden ? 'bg-slate-100 text-slate-400' :
+                          p.seatType === 'fixed' ? 'bg-emerald-100 text-emerald-700' : 'bg-sky-100 text-sky-700'
+                        }`}>
+                          {p.seatType === 'fixed' ? '고정석' : '자유석'}
+                        </span>
+                      </td>
+                    )}
+                    <td className={`px-3 py-2 text-right font-mono ${rowCls}`}>{fmtMoney(p.taxFreeAmount ?? 0)}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${rowCls}`}>{fmtMoney(p.taxableAmount ?? 0)}</td>
+                    <td className={`px-3 py-2 text-right font-mono font-semibold ${rowCls}`}>{fmtMoney(p.price)}</td>
+                    <td className={`px-3 py-2 ${rowCls}`}>{p.description ?? ''}</td>
+                    <td className={`px-3 py-2 ${rowCls}`}>{p.discountPolicy ?? ''}</td>
+                    <td className={`px-3 py-2 text-center ${rowCls}`}>{p.includesLocker ? '포함' : '-'}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                      <button
+                        onClick={() => toggleHide(p)}
+                        className={`mr-1 rounded-md px-2 py-1 text-xs ${
+                          hidden ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-white text-slate-600 ring-1 ring-slate-300 hover:bg-slate-100'
+                        }`}
+                      >
+                        {hidden ? '보임' : '숨김'}
+                      </button>
+                      <button className="btn-secondary mr-1" disabled={hidden} onClick={() => setEditing(p)}>수정</button>
+                      <button className="btn-danger" disabled={hidden}
+                        onClick={() => confirm(`"${p.name}" 삭제할까요?`) && remove(p.id)}>삭제</button>
                     </td>
-                  )}
-                  <td className="px-3 py-2 text-center">
-                    {p.type === 'period' ? '기간권' : p.type === 'hours' ? '시간권' : '회차권'}
-                  </td>
-                  <td className="px-3 py-2 text-center text-slate-600">
-                    {p.type === 'period' && `${p.durationDays}일`}
-                    {p.type === 'hours' && `${p.hours}시간`}
-                    {p.type === 'count' && `${p.counts}회`}
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono">{fmtMoney(p.price)}</td>
-                  <td className="px-3 py-2 text-center">{p.active ? '✅' : '⛔'}</td>
-                  <td className="px-3 py-2 text-center">{p.hidden ? '🙈' : '-'}</td>
-                  <td className="px-3 py-2 text-right">
-                    <button className="btn-secondary mr-1" onClick={() => setEditing(p)}>수정</button>
-                    <button className="btn-danger" onClick={() => confirm(`"${p.name}" 삭제할까요?`) && remove(p.id)}>삭제</button>
-                  </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -102,7 +131,7 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
         <PlanForm
           plan={editing}
           onClose={() => setEditing(null)}
-          onSave={(p) => { upsert(p); setEditing(null); }}
+          onSave={(p) => { upsert({ ...p, price: (p.taxFreeAmount ?? 0) + (p.taxableAmount ?? 0) }); setEditing(null); }}
         />
       )}
     </>
@@ -111,12 +140,14 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
 
 function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; onSave: (p: Plan) => void }) {
   const [v, setV] = useState<Plan>(plan);
+  const total = (v.taxFreeAmount ?? 0) + (v.taxableAmount ?? 0);
+
   return (
     <Modal
       open
       onClose={onClose}
       title={plan.name ? `이용권 수정 — ${plan.name}` : '이용권 추가'}
-      width="max-w-xl"
+      width="max-w-2xl"
       footer={
         <>
           <button className="btn-secondary" onClick={onClose}>취소</button>
@@ -127,6 +158,15 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
       <div className="grid grid-cols-2 gap-3 text-sm">
         <label className="col-span-2">이름
           <input className="input mt-1" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />
+        </label>
+        <label>구분 (회원 종류)
+          <select className="input mt-1" value={v.kind ?? '일반'}
+            onChange={(e) => setV({ ...v, kind: e.target.value })}>
+            <option value="일반">일반</option>
+            <option value="학생">학생</option>
+            <option value="성인">성인</option>
+            <option value="기타">기타</option>
+          </select>
         </label>
         {v.category === 'seat' && (
           <label>좌석 타입
@@ -163,21 +203,40 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
               onChange={(e) => setV({ ...v, counts: +e.target.value })} />
           </label>
         )}
-        <label>가격 (원)
-          <input className="input mt-1" type="number" min={0} step={1000} value={v.price}
-            onChange={(e) => setV({ ...v, price: +e.target.value })} />
-        </label>
+
+        <div className="col-span-2 grid grid-cols-3 gap-3 rounded-md bg-slate-50 p-3">
+          <label>면세금액 (원)
+            <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
+              value={v.taxFreeAmount ?? 0}
+              onChange={(e) => setV({ ...v, taxFreeAmount: +e.target.value })} />
+          </label>
+          <label>과세금액 (원)
+            <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
+              value={v.taxableAmount ?? 0}
+              onChange={(e) => setV({ ...v, taxableAmount: +e.target.value })} />
+          </label>
+          <label>합계금액 (자동)
+            <input className="input mt-1 bg-white text-right font-mono font-semibold" type="number" value={total} readOnly />
+          </label>
+        </div>
+
         <label className="col-span-2">설명 (선택)
           <textarea className="input mt-1" rows={2} value={v.description ?? ''}
             onChange={(e) => setV({ ...v, description: e.target.value })} />
         </label>
+        <label className="col-span-2">할인정책 (선택)
+          <input className="input mt-1" value={v.discountPolicy ?? ''}
+            onChange={(e) => setV({ ...v, discountPolicy: e.target.value })}
+            placeholder="예: 분두 1과목 할인(5%) / 형제 할인 10% / 비원생 정상가(0%)" />
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={!!v.includesLocker}
+            onChange={(e) => setV({ ...v, includesLocker: e.target.checked })} />
+          사물함 포함
+        </label>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} />
           활성 (판매·배정 가능)
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={!!v.hidden} onChange={(e) => setV({ ...v, hidden: e.target.checked })} />
-          숨김 (기본 목록에서 비노출)
         </label>
       </div>
     </Modal>

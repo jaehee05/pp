@@ -104,8 +104,9 @@ const SEAT_STORE_KEY = 'pp.seatLayout.v3';
 
 export function BulkImportPage() {
   const addStudent = useStudents((s) => s.add);
+  const removeStudent = useStudents((s) => s.remove);
   const studentList = useStudents((s) => s.list);
-  const { plans, addSubscription, addPayment } = usePlans();
+  const { plans, addSubscription, addPayment, subs, removeSubscription } = usePlans();
 
   const [running, setRunning] = useState(false);
   const [log, setLog] = useState<string[]>([]);
@@ -113,6 +114,55 @@ export function BulkImportPage() {
 
   function append(line: string) {
     setLog((prev) => [...prev, line]);
+  }
+
+  async function clearImported() {
+    const targetNames = new Set(ROWS.map((r) => `${r.name}|${r.phone}`));
+    const toDelete = studentList.filter((s) => targetNames.has(`${s.name}|${s.phone}`));
+    if (toDelete.length === 0) {
+      alert('삭제할 회원 없음 (이미 비어있음).');
+      return;
+    }
+    if (!confirm(`임포트 데이터와 일치하는 회원 ${toDelete.length}명을 삭제합니다.\n이용권·결제 내역도 함께 정리되고 좌석 배정도 해제됩니다.\n진행할까요?`)) return;
+
+    setRunning(true); setLog([]); setDone(false);
+
+    const idSet = new Set(toDelete.map((s) => s.id));
+
+    // 1) 이용권 삭제
+    let subCount = 0;
+    for (const s of subs) {
+      if (idSet.has(s.studentId)) { removeSubscription(s.id); subCount++; }
+    }
+    append(`🗑 이용권 ${subCount}건 삭제`);
+
+    // 2) 좌석 배정 해제
+    let seatCleared = 0;
+    try {
+      const raw = await firestoreStorage.getItem(SEAT_STORE_KEY);
+      if (raw) {
+        const layout = JSON.parse(raw) as { seats?: Seat[] };
+        if (layout.seats) {
+          for (const seat of layout.seats) {
+            if (seat.assignedStudentId && idSet.has(seat.assignedStudentId)) {
+              seat.assignedStudentId = null;
+              seatCleared++;
+            }
+          }
+          await firestoreStorage.setItem(SEAT_STORE_KEY, JSON.stringify(layout));
+          append(`🪑 좌석 ${seatCleared}석 배정 해제`);
+        }
+      }
+    } catch (e) {
+      append(`⚠️ 좌석 정리 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    // 3) 회원 삭제
+    for (const s of toDelete) removeStudent(s.id);
+    append(`👤 회원 ${toDelete.length}명 삭제`);
+    append('');
+    append('완료. "▶ 전체 등록" 다시 누르면 새로 등록됩니다.');
+    setRunning(false);
   }
 
   async function runImport() {
@@ -244,13 +294,23 @@ export function BulkImportPage() {
                 좌석은 좌석번호(label)로 자동 매칭. 배치도에 해당 번호 없으면 좌석만 미배정.
               </div>
             </div>
-            <button
-              className="rounded-md bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
-              onClick={runImport}
-              disabled={running || done}
-            >
-              {done ? '✅ 완료' : running ? '진행 중…' : '▶ 전체 등록'}
-            </button>
+            <div className="flex gap-2">
+              <button
+                className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-500"
+                onClick={clearImported}
+                disabled={running}
+                title="임포트 데이터와 일치하는 회원만 삭제 (이용권·좌석 정리)"
+              >
+                ⊝ 기존 데이터 삭제
+              </button>
+              <button
+                className="rounded-md bg-brand-600 px-6 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+                onClick={runImport}
+                disabled={running || done}
+              >
+                {done ? '✅ 완료' : running ? '진행 중…' : '▶ 전체 등록'}
+              </button>
+            </div>
           </div>
           {log.length > 0 && (
             <pre className="max-h-[600px] overflow-y-auto rounded-md bg-slate-900 p-4 text-xs leading-relaxed text-slate-100">

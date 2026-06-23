@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
+import { Modal } from '../../components/Modal';
 import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
@@ -9,17 +10,44 @@ import { fmtDateTime, fmtMoney } from '../../lib/format';
 
 type LogTab = 'member' | 'use' | 'pay';
 
+interface OrderItem {
+  id: string;
+  planId: string;
+  name: string;
+  amount: number;            // 음수 = 할인/기타조정
+  startAt: number;
+  durationDays?: number;
+  hours?: number;
+  counts?: number;
+  kind: 'plan' | 'etc' | 'discount';
+}
+interface PaymentSplit { method: 'card' | 'cash'; amount: number; approvalNo?: string; txId?: string }
+
 export function OpsMember() {
   const { id = '' } = useParams();
   const student = useStudents((s) => s.get(id));
   const update = useStudents((s) => s.update);
   const att = useAttendance();
-  const { subs, pays, plans } = usePlans();
+  const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription } = usePlans();
   const [memo, setMemo] = useState(student?.memo ?? '');
   const [tab, setTab] = useState<LogTab>('member');
-  const [planType, setPlanType] = useState<string>('');
-  const [planId, setPlanId] = useState<string>('');
   const [enrolling, setEnrolling] = useState(false);
+
+  // 이용권 선택
+  const [planSeatType, setPlanSeatType] = useState<'' | 'fixed' | 'free'>('');
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [showHidden, setShowHidden] = useState(false);
+
+  // 주문
+  const [order, setOrder] = useState<OrderItem[]>([]);
+  const [payments, setPayments] = useState<PaymentSplit[]>([{ method: 'card', amount: 0 }]);
+  const [processing, setProcessing] = useState(false);
+  const [payStatus, setPayStatus] = useState('');
+  const [showHistory, setShowHistory] = useState(false);
+
+  // 기타결제 / 할인 모달
+  const [etcModal, setEtcModal] = useState<'etc' | 'discount' | null>(null);
 
   useEffect(() => {
     const off = deviceAgent.on((e) => {
@@ -57,6 +85,148 @@ export function OpsMember() {
     deviceAgent.send({ id: `e_${student.id}`, cmd: 'enroll_fingerprint', studentId: student.id });
   }
   function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
+
+  // 좌석타입 + 숨김 필터 적용된 이용권 후보
+  const availablePlans = useMemo(() => plans.filter((p) => {
+    if (p.category !== 'seat') return false;
+    if (!p.active) return false;
+    if (!showHidden && p.hidden) return false;
+    if (planSeatType && p.seatType !== planSeatType) return false;
+    return true;
+  }), [plans, planSeatType, showHidden]);
+
+  function addPlanToOrder() {
+    if (!selectedPlanId) return alert('이용권을 선택하세요.');
+    const plan = plans.find((p) => p.id === selectedPlanId);
+    if (!plan) return;
+    setOrder((prev) => [...prev, {
+      id: `o_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      planId: plan.id, kind: 'plan',
+      name: plan.name,
+      amount: plan.price,
+      startAt: new Date(startDate).getTime(),
+      durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+    }]);
+    setSelectedPlanId('');
+    syncAmount();
+  }
+  function addEtc(name: string, amount: number) {
+    setOrder((prev) => [...prev, {
+      id: `o_${Date.now().toString(36)}`, kind: 'etc',
+      planId: '', name, amount, startAt: Date.now(),
+    }]);
+    syncAmount();
+  }
+  function addDiscount(reason: string, amount: number) {
+    setOrder((prev) => [...prev, {
+      id: `o_${Date.now().toString(36)}`, kind: 'discount',
+      planId: '', name: `할인: ${reason}`, amount: -Math.abs(amount), startAt: Date.now(),
+    }]);
+    syncAmount();
+  }
+  function removeOrderItem(itemId: string) {
+    setOrder((prev) => prev.filter((x) => x.id !== itemId));
+    syncAmount();
+  }
+
+  const orderTotal = order.reduce((s, i) => s + i.amount, 0);
+  const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
+
+  function syncAmount() {
+    setPayments((prev) => {
+      const total = order.reduce((s, i) => s + i.amount, 0);
+      if (prev.length === 1) return [{ ...prev[0], amount: Math.max(0, total) }];
+      return prev;
+    });
+  }
+  function splitPayment() {
+    setPayments((prev) => [...prev, { method: 'cash', amount: 0 }]);
+  }
+  function updateSplit(i: number, patch: Partial<PaymentSplit>) {
+    setPayments((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)));
+  }
+  function removeSplit(i: number) {
+    setPayments((prev) => prev.filter((_, idx) => idx !== i));
+  }
+
+  async function processPayment() {
+    if (!student) return;
+    if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
+    if (paidTotal !== orderTotal) return alert(`결제금액(${paidTotal.toLocaleString()})과 합계(${orderTotal.toLocaleString()})가 일치하지 않습니다.`);
+    setProcessing(true);
+    try {
+      const splits: PaymentSplit[] = [];
+      for (let i = 0; i < payments.length; i++) {
+        const p = payments[i];
+        if (p.amount === 0) { splits.push(p); continue; }
+        if (p.method === 'card') {
+          setPayStatus(`카드 결제 ${i + 1}/${payments.length} — 단말기에 카드를 긁어주세요…`);
+          const result = await new Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }>((resolve) => {
+            const off = deviceAgent.on((e) => {
+              if (e.type !== 'card_payment_result') return;
+              off(); resolve(e);
+            });
+            deviceAgent.send({ id: `pay_${Date.now()}_${i}`, cmd: 'card_pay', amount: p.amount, orderId: `ord_${student.id}_${i}` });
+          });
+          if (!result.ok) {
+            setPayStatus(`결제 실패: ${result.error ?? '카드 승인 거절'}`);
+            return;
+          }
+          splits.push({ ...p, approvalNo: result.approvalNo, txId: result.txId });
+        } else {
+          splits.push(p);
+        }
+      }
+      setPayStatus('승인 완료. 이용권/결제 저장 중…');
+
+      const cardSplit = splits.find((s) => s.method === 'card');
+      for (const item of order) {
+        if (item.kind !== 'plan') continue;
+        const plan = plans.find((x) => x.id === item.planId);
+        if (!plan) continue;
+        const payId = addPayment({
+          studentId: student.id, planId: plan.id, amount: item.amount,
+          method: splits[0]?.method ?? 'card',
+          cardApprovalNo: cardSplit?.approvalNo,
+          terminalTxId: cardSplit?.txId,
+          status: 'approved',
+        });
+        setPaymentApproved(payId, { approvedAt: Date.now() });
+        const endAt = item.durationDays ? item.startAt + item.durationDays * 86400000 : undefined;
+        addSubscription({
+          studentId: student.id, planId: plan.id,
+          planSnapshot: {
+            name: plan.name, type: plan.type,
+            durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+            price: plan.price,
+          },
+          startAt: item.startAt, endAt,
+          hoursRemaining: plan.hours,
+          countsRemaining: plan.counts,
+          paymentId: payId,
+          status: 'active',
+        });
+      }
+      const otherTotal = order.filter((i) => i.kind !== 'plan').reduce((s, i) => s + i.amount, 0);
+      if (otherTotal !== 0) {
+        addPayment({
+          studentId: student.id, planId: 'other', amount: otherTotal,
+          method: splits[0]?.method ?? 'card', status: 'approved',
+        });
+      }
+      setPayStatus(`✅ 결제 완료 (${orderTotal.toLocaleString()}원)`);
+      setOrder([]);
+      setPayments([{ method: 'card', amount: 0 }]);
+    } catch (e) {
+      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setPayStatus(''), 5000);
+    }
+  }
+
+  const allSubs = subs.filter((x) => x.studentId === student?.id)
+    .sort((a, b) => (b.startAt ?? 0) - (a.startAt ?? 0));
 
   const myLogs = att.logs.filter((l) => l.studentId === student.id);
   const myPays = pays.filter((p) => p.studentId === student.id);
@@ -175,7 +345,8 @@ export function OpsMember() {
         <section className="card p-6">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="font-semibold">서비스 이용 정보</h3>
-            <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50">+ 더보기</button>
+            <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+              onClick={() => setShowHistory(true)}>+ 더보기</button>
           </div>
           {!sub && <p className="py-6 text-center text-sm text-slate-400">등록된 이용권이 없습니다.</p>}
           {sub && (
@@ -261,55 +432,195 @@ export function OpsMember() {
           </div>
         </section>
 
-        {/* 이용권 선택 (신규 발급) */}
+        {/* 이용권 선택 */}
         <section className="card p-6">
           <h3 className="mb-3 font-semibold">이용권 선택</h3>
           <div className="grid grid-cols-12 gap-x-4 gap-y-3 text-sm">
             <Field label="좌석타입" col={3}>
-              <select className="input" value={planType} onChange={(e) => setPlanType(e.target.value)}>
-                <option value="">좌석타입 선택</option>
+              <select className="input" value={planSeatType}
+                onChange={(e) => { setPlanSeatType(e.target.value as '' | 'fixed' | 'free'); setSelectedPlanId(''); }}>
+                <option value="">전체</option>
                 <option value="fixed">고정석</option>
                 <option value="free">자유석</option>
               </select>
             </Field>
-            <Field label="좌석" col={3}>
-              <select className="input" value={planId} onChange={(e) => setPlanId(e.target.value)}>
-                <option value="">좌석 선택</option>
+            <Field label="이용권" col={4}>
+              <select className="input" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
+                <option value="">선택</option>
+                {availablePlans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} · {fmtMoney(p.price)}</option>
+                ))}
               </select>
             </Field>
             <Field label="시작일" col={3}>
-              <input className="input" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+              <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </Field>
-            <Field label="" col={3}>
-              <label className="flex h-9 items-center gap-2 text-xs text-slate-500">
-                <input type="checkbox" className="accent-brand-600" /> 숨긴 이용권 보기
+            <Field label="" col={2}>
+              <button className="btn-primary h-9 w-full" disabled={!selectedPlanId} onClick={addPlanToOrder}>+ 추가</button>
+            </Field>
+            <div className="col-span-12">
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                <input type="checkbox" className="accent-brand-600" checked={showHidden}
+                  onChange={(e) => setShowHidden(e.target.checked)} />
+                숨긴 이용권 보기
               </label>
-            </Field>
-          </div>
-          <div className="mt-3 rounded-md bg-slate-50 p-8 text-center text-sm text-slate-400">
-            등록된 이용권이 없습니다.
+            </div>
           </div>
         </section>
 
+        {/* 주문 정보 */}
+        <section className="card p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-semibold">주문 정보</h3>
+            <div className="flex gap-2">
+              <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+                onClick={() => setEtcModal('etc')}>💰 기타결제 추가</button>
+              <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+                onClick={() => setEtcModal('discount')}>% 할인 추가</button>
+            </div>
+          </div>
+          {order.length === 0 ? (
+            <p className="py-8 text-center text-sm text-slate-400">이용권을 선택해 추가하세요.</p>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="text-xs text-slate-500">
+                <tr>
+                  <th className="px-2 py-1 text-left">구분</th>
+                  <th className="px-2 py-1 text-left">내용</th>
+                  <th className="px-2 py-1 text-left">시작일</th>
+                  <th className="px-2 py-1 text-right">금액</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {order.map((it) => (
+                  <tr key={it.id} className="border-t border-slate-100">
+                    <td className="px-2 py-2 text-xs text-slate-500">
+                      {it.kind === 'plan' ? '이용권' : it.kind === 'discount' ? '할인' : '기타'}
+                    </td>
+                    <td className="px-2 py-2">{it.name}</td>
+                    <td className="px-2 py-2 text-xs text-slate-600">{it.kind === 'plan' ? new Date(it.startAt).toISOString().slice(0,10) : '-'}</td>
+                    <td className={`px-2 py-2 text-right font-mono ${it.amount < 0 ? 'text-rose-600' : ''}`}>
+                      {it.amount.toLocaleString()}원
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      <button className="text-xs text-rose-500 hover:underline" onClick={() => removeOrderItem(it.id)}>삭제</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-slate-300">
+                  <td className="px-2 py-2" colSpan={3}><b>합계금액</b></td>
+                  <td className="px-2 py-2 text-right text-lg font-bold">{orderTotal.toLocaleString()}원</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          )}
+        </section>
+
+        {/* 결제수단 */}
         <section className="card p-6">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <h3 className="font-semibold">결제수단 및 결제금액</h3>
-            <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50">분할결제</button>
+            <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+              onClick={splitPayment}>+ 분할결제</button>
           </div>
-          <div className="mt-4 grid grid-cols-12 items-center gap-3 text-sm">
-            <span className="col-span-1 text-slate-400">1</span>
-            <div className="col-span-3">
-              <div className="inline-flex overflow-hidden rounded-md ring-1 ring-slate-300">
-                <button className="bg-brand-100 px-4 py-1.5 text-sm text-brand-700">카드</button>
-                <button className="bg-white px-4 py-1.5 text-sm text-slate-600">현금</button>
-              </div>
-            </div>
-            <input className="input col-span-8 text-right font-mono" placeholder="0" />
+          <ol className="mt-4 space-y-2 text-sm">
+            {payments.map((p, i) => (
+              <li key={i} className="grid grid-cols-12 items-center gap-3">
+                <span className="col-span-1 text-center text-slate-400">{i + 1}</span>
+                <div className="col-span-3">
+                  <div className="inline-flex overflow-hidden rounded-md ring-1 ring-slate-300">
+                    {(['card', 'cash'] as const).map((m) => (
+                      <button key={m} onClick={() => updateSplit(i, { method: m })}
+                        className={`px-4 py-1.5 text-sm ${p.method === m ? 'bg-brand-100 text-brand-700 font-semibold' : 'bg-white text-slate-600'}`}>
+                        {m === 'card' ? '카드' : '현금'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <input className="input col-span-6 text-right font-mono" type="number" min={0} step={100}
+                  value={p.amount} onChange={(e) => updateSplit(i, { amount: +e.target.value })} />
+                <div className="col-span-2 text-right">
+                  {payments.length > 1 && (
+                    <button className="text-xs text-rose-500 hover:underline" onClick={() => removeSplit(i)}>삭제</button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-3 flex items-center justify-end gap-4 text-sm">
+            <span className={paidTotal === orderTotal ? 'text-emerald-600' : 'text-rose-600'}>
+              잔액: {(orderTotal - paidTotal).toLocaleString()}원
+            </span>
+            <span>총 결제금액 <b className="ml-1 text-lg">{paidTotal.toLocaleString()}</b> 원</span>
           </div>
-          <div className="mt-4 text-right text-sm">총 결제금액 <b className="ml-2 text-lg">0</b> 원</div>
-          <button className="mt-4 w-full rounded-md bg-slate-200 py-3 text-sm font-semibold text-slate-500" disabled>결제하기</button>
+          <button
+            className="mt-4 w-full rounded-md bg-brand-600 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-500"
+            disabled={processing || order.length === 0 || paidTotal !== orderTotal}
+            onClick={processPayment}
+          >
+            {processing ? '처리 중…' : '결제하기'}
+          </button>
+          {payStatus && (
+            <div className={`mt-3 rounded-md p-3 text-sm ${
+              payStatus.startsWith('✅') ? 'bg-emerald-50 text-emerald-700' :
+              payStatus.startsWith('오류') || payStatus.startsWith('결제 실패') ? 'bg-rose-50 text-rose-700' :
+              'bg-amber-50 text-amber-700'
+            }`}>{payStatus}</div>
+          )}
         </section>
       </div>
+
+      {/* 서비스 이용 정보 — 더보기 모달 */}
+      <Modal open={showHistory} onClose={() => setShowHistory(false)} title={`${student?.name ?? ''} — 전체 이용권 이력`} width="max-w-2xl">
+        {allSubs.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-400">이용권 이력이 없습니다.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 text-xs text-slate-500">
+              <tr>
+                <th className="px-2 py-2 text-left">이용권</th>
+                <th className="px-2 py-2 text-center">상태</th>
+                <th className="px-2 py-2 text-center">시작일</th>
+                <th className="px-2 py-2 text-center">종료일</th>
+                <th className="px-2 py-2 text-right">금액</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allSubs.map((s) => (
+                <tr key={s.id} className="border-t border-slate-100">
+                  <td className="px-2 py-2">{s.planSnapshot.name}</td>
+                  <td className="px-2 py-2 text-center">
+                    <span className={
+                      s.status === 'active' ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700' :
+                      s.status === 'expired' ? 'rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500' :
+                      'rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-700'
+                    }>{s.status === 'active' ? '이용중' : s.status === 'expired' ? '만료' : '환불'}</span>
+                  </td>
+                  <td className="px-2 py-2 text-center text-xs">{new Date(s.startAt).toISOString().slice(0, 10)}</td>
+                  <td className="px-2 py-2 text-center text-xs">{s.endAt ? new Date(s.endAt).toISOString().slice(0, 10) : '-'}</td>
+                  <td className="px-2 py-2 text-right font-mono">{fmtMoney(s.planSnapshot.price)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Modal>
+
+      {/* 기타결제 / 할인 추가 모달 */}
+      <EtcModal
+        open={etcModal === 'etc'} onClose={() => setEtcModal(null)}
+        title="기타결제 추가" labelA="항목" labelB="금액"
+        onSubmit={(n, amt) => addEtc(n, amt)}
+      />
+      <EtcModal
+        open={etcModal === 'discount'} onClose={() => setEtcModal(null)}
+        title="할인 추가" labelA="할인 사유" labelB="할인 금액"
+        onSubmit={(n, amt) => addDiscount(n, amt)}
+      />
     </>
   );
 }
@@ -328,5 +639,32 @@ function Field2({ label, children }: { label: string; children: React.ReactNode 
       <div className="col-span-1 text-xs text-slate-500">{label}</div>
       <div className="col-span-2 text-sm">{children}</div>
     </>
+  );
+}
+
+function EtcModal({ open, onClose, title, labelA, labelB, onSubmit }: {
+  open: boolean; onClose: () => void; title: string;
+  labelA: string; labelB: string;
+  onSubmit: (name: string, amount: number) => void;
+}) {
+  const [name, setName] = useState('');
+  const [amount, setAmount] = useState(0);
+  return (
+    <Modal open={open} onClose={onClose} title={title}
+      footer={
+        <>
+          <button className="btn-secondary" onClick={onClose}>취소</button>
+          <button className="btn-primary" onClick={() => { if (!name) return; onSubmit(name, amount); setName(''); setAmount(0); onClose(); }}>추가</button>
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm">
+        <label>{labelA}<input className="input mt-1" value={name} onChange={(e) => setName(e.target.value)} /></label>
+        <label>{labelB} (원)
+          <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
+            value={amount} onChange={(e) => setAmount(+e.target.value)} />
+        </label>
+      </div>
+    </Modal>
   );
 }

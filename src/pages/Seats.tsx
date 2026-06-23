@@ -157,7 +157,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     if (!paletteDrag) return;
     const { x, y } = pxFromEvent(e);
     const id = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    const label = paletteDrag.type === 'seat' ? String(autoLabelN).padStart(2, '0') : paletteDrag.label;
+    const label = paletteDrag.type === 'seat' ? String(autoLabelN) : paletteDrag.label;
     const next: Seat = {
       id,
       label,
@@ -694,13 +694,6 @@ function SeatBox({
     idle: 'bg-slate-200',         // 퇴실/이용중인데 미입실: 회색
     empty: 'bg-slate-200',
   }[state];
-  const numChipByState = {
-    in: 'bg-emerald-500 text-white',
-    temp: 'bg-amber-500 text-white',
-    idle: 'bg-slate-500 text-white',
-    empty: 'bg-slate-500 text-white',
-  }[state];
-
   const sub = student
     ? subs.filter((x) => x.studentId === student.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0]
     : null;
@@ -715,18 +708,16 @@ function SeatBox({
       }`}
     >
       <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
-        {/* 헤더: 번호 칩 + 분류 */}
-        <div className={`flex items-center gap-1 px-1 py-0.5 text-[11px] ${headerBgByState}`}>
-          <span className={`inline-block min-w-[20px] rounded px-1 text-center font-bold leading-tight ${numChipByState}`}>
-            {seat.label}
-          </span>
-          <span className="font-medium text-slate-700">{seat.tag ?? '고정석'}</span>
+        {/* 헤더: 번호 + 분류 (1줄 고정) */}
+        <div className={`flex shrink-0 items-baseline gap-1 truncate px-1.5 py-0.5 text-[11px] leading-none text-slate-800 ${headerBgByState}`}>
+          <span className="font-bold tabular-nums">{seat.label}</span>
+          <span className="truncate text-[10px] font-medium text-slate-700">{seat.tag ?? '고정석'}</span>
         </div>
 
         {/* 본문 */}
         {student ? (
-          <div className="flex flex-1 flex-col justify-between px-1.5 py-1 text-[10px]">
-            <div className="flex items-center gap-1 text-slate-600">
+          <div className="flex flex-1 flex-col justify-between gap-0.5 px-1.5 py-0.5 leading-none">
+            <div className="flex items-center gap-1 whitespace-nowrap text-[9px] text-slate-500">
               {endAt && (
                 <>
                   <span className="font-mono">{expiryShort(endAt)}</span>
@@ -736,13 +727,13 @@ function SeatBox({
                 </>
               )}
             </div>
-            <div className="flex items-center justify-between text-[11px]">
+            <div className="flex min-w-0 items-baseline gap-0.5 text-[11px]">
               <span className="truncate font-semibold text-slate-800">{student.name}</span>
-              <span className={
+              <span className={`shrink-0 text-[10px] leading-none ${
                 student.gender === 'M' ? 'text-sky-500'
                 : student.gender === 'F' ? 'text-pink-500'
                 : 'text-slate-300'
-              }>
+              }`}>
                 {student.gender === 'M' ? '♂' : student.gender === 'F' ? '♀' : ''}
               </span>
             </div>

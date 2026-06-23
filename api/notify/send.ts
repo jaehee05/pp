@@ -10,7 +10,10 @@
 //   PPURIO_SENDER             SMS/LMS 발신번호 (등록된 번호)
 //   PPURIO_SENDER_PROFILE     알림톡 발신프로필 — 알림톡(channel=kakao + templateCode) 사용 시 필수
 
-export const config = { runtime: 'edge' };
+// Node.js runtime — Edge runtime은 비표준 포트(:8080)나 HTTP outbound 차단 때문에
+// VM 프록시(http://158.180.84.176:8080)에 접근 못 함 ("Direct IP access" 403).
+// Node 런타임은 Lambda 기반이라 네트워크 제약 없음.
+export const config = { runtime: 'nodejs' };
 
 interface SendRequest {
   to: string;

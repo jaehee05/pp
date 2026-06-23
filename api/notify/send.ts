@@ -96,24 +96,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       wantsKakao ? (body.messageType ?? 'ALH') :
       body.channel === 'lms' || smsBytes(body.message) > 90 ? 'LMS' : 'SMS';
 
-    const target: Record<string, unknown> = { to: digits(body.to) };
-    if (body.changeWord) target.changeWord = body.changeWord;
+    const refKey = `pp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    let payload: Record<string, unknown>;
 
-    const payload: Record<string, unknown> = {
-      account: username,
-      messageType,
-      from: digits(sender),
-      duplicateFlag: 'Y',
-      content: body.message,
-      targetCount: 1,
-      targets: [target],
-      refKey: `pp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
-    };
-    if (messageType === 'LMS') payload.subject = body.subject || '[합격공간] 알림';
     if (wantsKakao) {
-      payload.senderProfile = senderProfile;
-      payload.templateCode = body.templateCode;
-      payload.isResend = 'N';
+      // 알림톡: from/content 사용 안 함. senderProfile + templateCode + changeWord
+      const target: Record<string, unknown> = { to: digits(body.to) };
+      if (body.changeWord) target.changeWord = body.changeWord;
+      payload = {
+        account: username,
+        messageType,
+        senderProfile,
+        templateCode: body.templateCode,
+        duplicateFlag: 'Y',
+        isResend: 'N',
+        targetCount: 1,
+        targets: [target],
+        refKey,
+      };
+    } else {
+      // SMS/LMS: from + content
+      const target: Record<string, unknown> = { to: digits(body.to) };
+      payload = {
+        account: username,
+        messageType,
+        from: digits(sender),
+        duplicateFlag: 'Y',
+        content: body.message,
+        targetCount: 1,
+        targets: [target],
+        refKey,
+      };
+      if (messageType === 'LMS') payload.subject = body.subject || '[합격공간] 알림';
     }
 
     const { ok, status, body: resBody } = await proxyFetch(

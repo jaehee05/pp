@@ -105,6 +105,7 @@ const SEAT_STORE_KEY = 'pp.seatLayout.v3';
 export function BulkImportPage() {
   const addStudent = useStudents((s) => s.add);
   const removeStudent = useStudents((s) => s.remove);
+  const updateStudent = useStudents((s) => s.update);
   const studentList = useStudents((s) => s.list);
   const { plans, addSubscription, addPayment, subs, removeSubscription } = usePlans();
 
@@ -163,6 +164,20 @@ export function BulkImportPage() {
     append('');
     append('완료. "▶ 전체 등록" 다시 누르면 새로 등록됩니다.');
     setRunning(false);
+  }
+
+  function bulkSetMsgReceive(target: 'student' | 'parent', value: boolean) {
+    const label = target === 'parent' ? '학부모' : '본인';
+    if (!confirm(`전체 회원(${studentList.length}명)의 ${label} 메시지 수신을 ${value ? 'ON' : 'OFF'} 으로 일괄 변경합니다. 진행할까요?`)) return;
+    setLog([]);
+    let changed = 0;
+    for (const s of studentList) {
+      const cur = target === 'parent' ? s.parentMsgReceive : s.msgReceive;
+      if (cur === value) continue;
+      updateStudent(s.id, target === 'parent' ? { parentMsgReceive: value } : { msgReceive: value });
+      changed++;
+    }
+    setLog([`✅ ${label} 메시지 수신 ${value ? 'ON' : 'OFF'} — ${changed}명 변경 (이미 같은 값이었던 ${studentList.length - changed}명 스킵)`]);
   }
 
   async function runImport() {
@@ -317,6 +332,41 @@ export function BulkImportPage() {
               {log.join('\n')}
             </pre>
           )}
+        </div>
+
+        <div className="card mt-4 p-6">
+          <h3 className="mb-3 font-semibold">📨 메시지 수신 일괄 토글</h3>
+          <p className="mb-4 text-xs text-slate-500">
+            현재 등록된 모든 회원({studentList.length}명)의 메시지 수신 설정을 한 번에 변경합니다.
+          </p>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-md border border-slate-200 p-4">
+              <div className="mb-2 text-sm font-semibold text-slate-700">학부모 메시지 수신</div>
+              <div className="flex gap-2">
+                <button className="flex-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  onClick={() => bulkSetMsgReceive('parent', true)} disabled={running}>
+                  전체 ON
+                </button>
+                <button className="flex-1 rounded-md bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+                  onClick={() => bulkSetMsgReceive('parent', false)} disabled={running}>
+                  전체 OFF
+                </button>
+              </div>
+            </div>
+            <div className="rounded-md border border-slate-200 p-4">
+              <div className="mb-2 text-sm font-semibold text-slate-700">본인(학생) 메시지 수신</div>
+              <div className="flex gap-2">
+                <button className="flex-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+                  onClick={() => bulkSetMsgReceive('student', true)} disabled={running}>
+                  전체 ON
+                </button>
+                <button className="flex-1 rounded-md bg-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300"
+                  onClick={() => bulkSetMsgReceive('student', false)} disabled={running}>
+                  전체 OFF
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

@@ -1,14 +1,25 @@
-// Vercel Edge Function — 뿌리오(PPURIO) 메시지 발송 프록시.
-// 환경변수 PPURIO_USERNAME / PPURIO_API_KEY / PPURIO_SENDER 가 모두 설정되어 있어야 실제 발송.
-// 미설정 시 mock 응답.
+// Vercel Edge Function — 뿌리오(PPURIO) 메시지 발송.
+// PPURIO는 IP 화이트리스트 인증을 요구하므로, 고정 IP를 가진 외부 VM에 띄운 프록시
+// (2027-consulting/vm-proxy 와 동일)를 경유한다. 직접 호출하면 인증 실패.
+//
+// 필요한 환경변수:
+//   PPURIO_PROXY_URL          프록시 endpoint (예: http://A.B.C.D:8080/)
+//   PPURIO_PROXY_SECRET       프록시 인증 시크릿 (X-Proxy-Secret 헤더)
+//   PPURIO_USERNAME           뿌리오 계정 ID
+//   PPURIO_API_KEY            API 키
+//   PPURIO_SENDER             SMS/LMS 발신번호 (등록된 번호)
+//   PPURIO_SENDER_PROFILE     알림톡 발신프로필 — 알림톡(channel=kakao + templateCode) 사용 시 필수
 
 export const config = { runtime: 'edge' };
 
 interface SendRequest {
-  to: string;             // 수신 번호
-  channel: 'sms' | 'lms';
+  to: string;
+  channel: 'sms' | 'lms' | 'kakao';
   message: string;
-  subject?: string;       // LMS용 제목 (선택)
+  subject?: string;
+  templateCode?: string;                 // 알림톡 템플릿 코드 (channel=kakao 시 필수)
+  changeWord?: Record<string, string>;   // 알림톡 변수 치환
+  messageType?: 'ALT' | 'ALH' | 'ALI';   // 알림톡 유형 (강조형=ALH 기본)
 }
 
 interface SendResult {
@@ -19,8 +30,7 @@ interface SendResult {
   error?: string;
 }
 
-const TOKEN_URL = 'https://message.ppurio.com/v1/token';
-const SEND_URL  = 'https://message.ppurio.com/v1/message';
+const TOKEN_MEM: { token?: string; expiresAt?: number } = {};
 
 export default async function handler(req: Request): Promise<Response> {
   if (req.method !== 'POST') return json({ ok: false, error: 'Method not allowed' }, 405);
@@ -32,38 +42,42 @@ export default async function handler(req: Request): Promise<Response> {
   if (!body.to || !body.message) return json({ ok: false, error: 'to and message are required' }, 400);
 
   const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env ?? {};
+  const proxyUrl = env.PPURIO_PROXY_URL;
+  const proxySecret = env.PPURIO_PROXY_SECRET;
   const username = env.PPURIO_USERNAME;
   const apiKey   = env.PPURIO_API_KEY;
   const sender   = env.PPURIO_SENDER;
+  const senderProfile = env.PPURIO_SENDER_PROFILE;
 
   if (!username || !apiKey || !sender) {
     return json({
       ok: true, mock: true, id: `mock_${Date.now()}`,
-      error: 'PPURIO env vars not set (PPURIO_USERNAME / PPURIO_API_KEY / PPURIO_SENDER) — mock response',
+      error: 'PPURIO 계정 env(PPURIO_USERNAME/API_KEY/SENDER) 미설정 — mock',
+    });
+  }
+  if (!proxyUrl || !proxySecret) {
+    return json({
+      ok: true, mock: true, id: `mock_${Date.now()}`,
+      error: 'PROXY env(PPURIO_PROXY_URL/SECRET) 미설정 — mock. 2027 VM 프록시 정보를 등록하세요.',
     });
   }
 
   try {
-    // 1) 토큰 발급
-    const basic = base64(`${username}:${apiKey}`);
-    const tokenRes = await fetch(TOKEN_URL, {
-      method: 'POST',
-      headers: { 'Authorization': `Basic ${basic}`, 'Content-Type': 'application/json' },
-    });
-    const tokenText = await tokenRes.text();
-    if (!tokenRes.ok) {
-      return json({ ok: false, error: `token ${tokenRes.status}: ${tokenText.slice(0, 200)}` }, 500);
-    }
-    let tokenJson: { token?: string };
-    try { tokenJson = JSON.parse(tokenText); }
-    catch { return json({ ok: false, error: `token parse fail: ${tokenText.slice(0, 200)}` }, 500); }
-    const token = tokenJson.token;
-    if (!token) return json({ ok: false, error: `token field missing in response: ${tokenText.slice(0, 200)}` }, 500);
+    const token = await getToken(proxyUrl, proxySecret, username, apiKey);
+    if (!token) return json({ ok: false, error: '토큰 발급 실패' }, 500);
 
-    // 2) 메시지 발송 (문자만 — SMS/LMS).
-    //    SMS 한도(90byte, 한글 2byte)를 넘으면 자동으로 LMS로 승격.
+    const wantsKakao = body.channel === 'kakao' && !!body.templateCode;
+    if (wantsKakao && !senderProfile) {
+      return json({ ok: false, error: 'PPURIO_SENDER_PROFILE 미설정 — 알림톡 발송 불가' }, 500);
+    }
+
+    const path = wantsKakao ? '/v1/kakao' : '/v1/message';
     const messageType =
+      wantsKakao ? (body.messageType ?? 'ALH') :
       body.channel === 'lms' || smsBytes(body.message) > 90 ? 'LMS' : 'SMS';
+
+    const target: Record<string, unknown> = { to: digits(body.to) };
+    if (body.changeWord) target.changeWord = body.changeWord;
 
     const payload: Record<string, unknown> = {
       account: username,
@@ -72,48 +86,82 @@ export default async function handler(req: Request): Promise<Response> {
       duplicateFlag: 'Y',
       content: body.message,
       targetCount: 1,
-      targets: [{ to: digits(body.to) }],
+      targets: [target],
+      refKey: `pp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
     };
     if (messageType === 'LMS') payload.subject = body.subject || '[합격공간] 알림';
+    if (wantsKakao) {
+      payload.senderProfile = senderProfile;
+      payload.templateCode = body.templateCode;
+      payload.isResend = 'N';
+    }
 
-    const sendRes = await fetch(SEND_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-    const sendText = await sendRes.text();
-    let sendJson: { code?: string; description?: string; messageKey?: string } = {};
-    try { sendJson = JSON.parse(sendText); } catch { /* */ }
+    const { ok, status, body: resBody } = await proxyFetch(
+      proxyUrl, proxySecret, path,
+      { Authorization: `Bearer ${token}` }, payload,
+    );
 
-    if (!sendRes.ok || (sendJson.code && sendJson.code !== '1000')) {
+    if (!ok || (resBody?.code && resBody.code !== '1000')) {
       return json({
         ok: false,
-        code: sendJson.code,
-        error: sendJson.description ?? `send ${sendRes.status}: ${sendText.slice(0, 200)}`,
+        code: resBody?.code,
+        error: resBody?.description ?? resBody?.error ?? `send ${status}: ${JSON.stringify(resBody).slice(0, 200)}`,
       }, 500);
     }
-    return json({ ok: true, id: sendJson.messageKey, code: sendJson.code });
+    return json({ ok: true, id: resBody?.messageKey ?? resBody?.refKey, code: resBody?.code });
   } catch (e) {
     return json({ ok: false, error: e instanceof Error ? e.message : String(e) }, 500);
   }
 }
 
-function base64(s: string): string {
-  // Edge Runtime: btoa 가능
-  return btoa(s);
+async function getToken(proxyUrl: string, proxySecret: string, username: string, apiKey: string): Promise<string | null> {
+  const now = Date.now();
+  if (TOKEN_MEM.token && (TOKEN_MEM.expiresAt ?? 0) > now + 60_000) return TOKEN_MEM.token;
+  const basic = btoa(`${username}:${apiKey}`);
+  const { ok, body } = await proxyFetch(proxyUrl, proxySecret, '/v1/token', { Authorization: `Basic ${basic}` }, {});
+  if (!ok || !body?.token) return null;
+  TOKEN_MEM.token = body.token;
+  TOKEN_MEM.expiresAt = now + 23 * 60 * 60 * 1000;
+  return body.token;
 }
+
+interface ProxyResp {
+  ok: boolean;
+  status: number;
+  body: Record<string, unknown> & {
+    token?: string;
+    code?: string;
+    description?: string;
+    messageKey?: string;
+    refKey?: string;
+    error?: string;
+  };
+}
+
+async function proxyFetch(
+  proxyUrl: string, proxySecret: string,
+  path: string,
+  headers: Record<string, string>,
+  body: Record<string, unknown>,
+): Promise<ProxyResp> {
+  const res = await fetch(proxyUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Proxy-Secret': proxySecret },
+    body: JSON.stringify({ path, method: 'POST', headers, body }),
+    signal: AbortSignal.timeout(10_000),
+  });
+  const text = await res.text();
+  let parsed: Record<string, unknown>;
+  try { parsed = JSON.parse(text); } catch { parsed = { raw: text }; }
+  return { ok: res.ok, status: res.status, body: parsed };
+}
+
 function digits(s: string): string { return s.replace(/\D/g, ''); }
-// SMS 바이트 수 추정(EUC-KR 기준: 한글/비ASCII = 2byte, ASCII = 1byte).
 function smsBytes(s: string): number {
   let n = 0;
   for (const ch of s) n += ch.charCodeAt(0) > 127 ? 2 : 1;
   return n;
 }
 function json(data: SendResult, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status, headers: { 'Content-Type': 'application/json' },
-  });
+  return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 }

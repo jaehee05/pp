@@ -4,7 +4,7 @@ import { OpsLayout } from './components/OpsLayout';
 import { Dashboard } from './pages/admin/Dashboard';
 import { MembersAdmin } from './pages/admin/Members';
 import { SimpleStub } from './pages/admin/Stub';
-import { OpsLayoutPage } from './pages/ops/LayoutPage';
+import { SeatsPage } from './pages/Seats';
 import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
 import { OpsStub } from './pages/ops/Stub';
@@ -15,7 +15,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/kiosk" element={<KioskPage />} />
-        <Route index element={<Navigate to="/ops/layout" replace />} />
+        <Route index element={<Navigate to="/admin/dashboard" replace />} />
 
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
@@ -32,13 +32,12 @@ export default function App() {
           <Route path="messages/templates" element={<SimpleStub title="메시지 템플릿" />} />
           <Route path="messages/history" element={<SimpleStub title="발송 이력" />} />
           <Route path="messages/balance" element={<SimpleStub title="잔여 캐시/포인트" />} />
-          <Route path="layouts/seats" element={<Navigate to="/ops/layout" replace />} />
+          <Route path="layouts/seats" element={<SeatsPage />} />
           <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
         </Route>
 
         <Route path="/ops" element={<OpsLayout />}>
-          <Route index element={<Navigate to="/ops/layout" replace />} />
-          <Route path="layout" element={<OpsLayoutPage />} />
+          <Route index element={<Navigate to="/ops/register" replace />} />
           <Route path="rooms" element={<OpsStub title="룸 운영" />} />
           <Route path="lockers" element={<OpsStub title="사물함 운영" />} />
           <Route path="shoes" element={<OpsStub title="신발장 운영" />} />

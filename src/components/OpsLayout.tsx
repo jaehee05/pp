@@ -3,7 +3,6 @@ import { AppHeader } from './AppHeader';
 import { MemberPanel } from './MemberPanel';
 
 const NAV = [
-  { to: '/ops/layout', label: '배치도', icon: '🧩' },
   { to: '/ops/rooms', label: '룸', icon: '🏠' },
   { to: '/ops/lockers', label: '사물함', icon: '🗄️' },
   { to: '/ops/shoes', label: '신발장', icon: '👟' },

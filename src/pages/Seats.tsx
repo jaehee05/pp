@@ -27,6 +27,19 @@ const PALETTE: PaletteItem[] = [
 ];
 
 const STORE_KEY = 'pp.seatLayout.v3';
+const DEFAULT_KEY = 'pp.seatLayout.default.v1';
+
+function loadDefault(): SavedLayout | null {
+  try {
+    const raw = localStorage.getItem(DEFAULT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* */ }
+  return null;
+}
+
+function emptyLayout(): SavedLayout {
+  return { width: 1427, height: 1421, snap: 5, offsetX: 1, offsetY: 62, offsetZ: 50, seats: [], autoLabelN: 1 };
+}
 
 interface SavedLayout {
   width: number;
@@ -47,7 +60,8 @@ function loadLayout(): SavedLayout {
       return { offsetX: 1, offsetY: 62, offsetZ: 50, ...v };
     }
   } catch { /* */ }
-  return { width: 1427, height: 1421, snap: 5, offsetX: 1, offsetY: 62, offsetZ: 50, seats: [], autoLabelN: 1 };
+  // 현재 상태 없으면 기본값(스냅샷)이 있으면 그걸로, 없으면 빈 캔버스
+  return loadDefault() ?? emptyLayout();
 }
 
 export function SeatsPage() {
@@ -162,8 +176,41 @@ export function SeatsPage() {
   }
 
   function clearAll() {
-    if (!confirm('전체 배치를 초기화할까요?')) return;
-    setSeats([]); setSelectedId(null); setAutoLabelN(1);
+    const def = loadDefault();
+    const msg = def
+      ? '저장된 기본 배치도로 되돌릴까요? 현재 변경사항은 사라집니다.'
+      : '전체 배치를 비울까요? (기본 배치도가 저장되어 있지 않습니다)';
+    if (!confirm(msg)) return;
+    if (def) {
+      setWidth(def.width);
+      setHeight(def.height);
+      setSnap(def.snap);
+      setOffsetX(def.offsetX);
+      setOffsetY(def.offsetY);
+      setOffsetZ(def.offsetZ);
+      setSeats(def.seats);
+      setAutoLabelN(def.autoLabelN);
+    } else {
+      setSeats([]); setAutoLabelN(1);
+    }
+    setSelectedId(null);
+  }
+
+  function saveAsDefault() {
+    const snapshot: SavedLayout = {
+      width, height, snap,
+      offsetX, offsetY, offsetZ,
+      seats: JSON.parse(JSON.stringify(seats)),
+      autoLabelN,
+    };
+    localStorage.setItem(DEFAULT_KEY, JSON.stringify(snapshot));
+    alert(`현재 배치를 기본값으로 저장했습니다.\n좌석 ${seats.filter(s => s.type === 'seat').length}개 / 캔버스 ${width}×${height}\n이후 "기본값으로 복원" 시 이 상태로 되돌아갑니다.`);
+  }
+
+  function clearDefault() {
+    if (!confirm('저장된 기본 배치도를 삭제할까요? 이후 "초기화"는 빈 캔버스가 됩니다.')) return;
+    localStorage.removeItem(DEFAULT_KEY);
+    alert('기본 배치도 삭제 완료.');
   }
 
   return (
@@ -181,7 +228,9 @@ export function SeatsPage() {
                 </button>
               ))}
             </div>
-            <button className="btn-secondary" onClick={clearAll}>전체 초기화</button>
+            <button className="btn-primary" onClick={saveAsDefault}>★ 기본값으로 저장</button>
+            <button className="btn-secondary" onClick={clearAll}>↺ 기본값으로 복원</button>
+            <button className="btn-secondary" onClick={clearDefault}>기본값 삭제</button>
           </>
         }
       />

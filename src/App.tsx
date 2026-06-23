@@ -37,7 +37,8 @@ export default function App() {
         </Route>
 
         <Route path="/ops" element={<OpsLayout />}>
-          <Route index element={<Navigate to="/ops/register" replace />} />
+          <Route index element={<Navigate to="/ops/layout" replace />} />
+          <Route path="layout" element={<SeatsPage editable={false} />} />
           <Route path="rooms" element={<OpsStub title="룸 운영" />} />
           <Route path="lockers" element={<OpsStub title="사물함 운영" />} />
           <Route path="shoes" element={<OpsStub title="신발장 운영" />} />

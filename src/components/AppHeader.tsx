@@ -10,7 +10,7 @@ export function AppHeader() {
 
   function switchTo(area: 'admin' | 'ops') {
     if (area === 'admin') nav('/admin/dashboard');
-    else nav('/ops/register');
+    else nav('/ops/layout');
   }
 
   return (

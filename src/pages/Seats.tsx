@@ -64,9 +64,9 @@ function loadLayout(): SavedLayout {
   return loadDefault() ?? emptyLayout();
 }
 
-export function SeatsPage() {
+export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const initial = useMemo(loadLayout, []);
-  const [mode, setMode] = useState<EditorMode>('edit');
+  const [mode, setMode] = useState<EditorMode>(editable ? 'edit' : 'view');
   const [width, setWidth] = useState(initial.width);
   const [height, setHeight] = useState(initial.height);
   const [snap, setSnap] = useState(initial.snap);
@@ -125,14 +125,15 @@ export function SeatsPage() {
   }
 
   function onSeatMouseDown(e: React.MouseEvent, s: Seat) {
-    if (mode !== 'edit') return;
     e.stopPropagation();
     setSelectedId(s.id);
+    if (!editable || mode !== 'edit') return;
     const { x, y } = pxFromEvent(e);
     dragRef.current = { id: s.id, offX: x - s.x, offY: y - s.y };
   }
 
   function onResizeMouseDown(e: React.MouseEvent, s: Seat) {
+    if (!editable) return;
     e.stopPropagation();
     setSelectedId(s.id);
     const { x, y } = pxFromEvent(e);
@@ -216,9 +217,11 @@ export function SeatsPage() {
   return (
     <>
       <PageHeader
-        title="좌석 배치"
-        desc="팔레트에서 도형을 선택 → 배치도에서 클릭. 좌석은 학생 배정 시 카드 형태로 표시됩니다."
-        actions={
+        title={editable ? '좌석 배치 (편집)' : '배치도'}
+        desc={editable
+          ? '팔레트에서 도형을 선택 → 배치도에서 클릭. 좌석은 학생 배정 시 카드 형태로 표시됩니다.'
+          : '좌석을 클릭하면 우측에서 학생 배정·상태를 관리할 수 있습니다. 모양 편집은 관리 → 배치도/사물함 관리에서.'}
+        actions={editable && (
           <>
             <div className="rounded-md bg-slate-100 p-0.5 text-sm">
               {(['edit', 'view'] as EditorMode[]).map((m) => (
@@ -232,11 +235,11 @@ export function SeatsPage() {
             <button className="btn-secondary" onClick={clearAll}>↺ 기본값으로 복원</button>
             <button className="btn-secondary" onClick={clearDefault}>기본값 삭제</button>
           </>
-        }
+        )}
       />
 
       <div className="flex h-[calc(100%-65px)]">
-        {mode === 'edit' && (
+        {editable && mode === 'edit' && (
           <aside className="w-56 shrink-0 border-r border-slate-200 bg-white p-3">
             <div className="mb-2 text-xs font-semibold text-slate-500">팔레트</div>
             <div className="grid grid-cols-2 gap-2">
@@ -302,8 +305,7 @@ export function SeatsPage() {
           </div>
         </div>
 
-        {mode === 'edit' && (
-          <aside className="w-72 shrink-0 border-l border-slate-200 bg-white p-4">
+        <aside className="w-72 shrink-0 border-l border-slate-200 bg-white p-4">
             {!selected ? (
               <div>
                 <div className="mb-3 text-center text-sm font-bold text-slate-800">배치도</div>
@@ -318,25 +320,25 @@ export function SeatsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="넓이">
-                      <input className="input p-1.5 text-center" type="number" value={width}
+                      <input className="input p-1.5 text-center" type="number" value={width} readOnly={!editable}
                         onChange={(e) => setWidth(Math.max(400, +e.target.value))} />
                     </Field>
                     <Field label="높이">
-                      <input className="input p-1.5 text-center" type="number" value={height}
+                      <input className="input p-1.5 text-center" type="number" value={height} readOnly={!editable}
                         onChange={(e) => setHeight(Math.max(400, +e.target.value))} />
                     </Field>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <Field label="X">
-                      <input className="input p-1.5 text-center" type="number" value={offsetX}
+                      <input className="input p-1.5 text-center" type="number" value={offsetX} readOnly={!editable}
                         onChange={(e) => setOffsetX(+e.target.value)} />
                     </Field>
                     <Field label="Y">
-                      <input className="input p-1.5 text-center" type="number" value={offsetY}
+                      <input className="input p-1.5 text-center" type="number" value={offsetY} readOnly={!editable}
                         onChange={(e) => setOffsetY(+e.target.value)} />
                     </Field>
                     <Field label="Z">
-                      <input className="input p-1.5 text-center" type="number" value={offsetZ}
+                      <input className="input p-1.5 text-center" type="number" value={offsetZ} readOnly={!editable}
                         onChange={(e) => setOffsetZ(+e.target.value)} />
                     </Field>
                   </div>
@@ -349,16 +351,18 @@ export function SeatsPage() {
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-800">{selected.label} — {selected.type}</div>
-                  <button className="text-xs text-rose-500 hover:underline" onClick={deleteSelected}>삭제</button>
+                  {editable && (
+                    <button className="text-xs text-rose-500 hover:underline" onClick={deleteSelected}>삭제</button>
+                  )}
                 </div>
                 <div className="space-y-3 text-sm">
                   <div className="grid grid-cols-2 gap-2">
                     <Field label="좌석번호/라벨">
-                      <input className="input" value={selected.label}
+                      <input className="input" value={selected.label} readOnly={!editable}
                         onChange={(e) => updateSelected({ label: e.target.value })} />
                     </Field>
                     <Field label="분류">
-                      <input className="input" value={selected.tag ?? ''} placeholder="고정석"
+                      <input className="input" value={selected.tag ?? ''} placeholder="고정석" readOnly={!editable}
                         onChange={(e) => updateSelected({ tag: e.target.value })} />
                     </Field>
                   </div>
@@ -369,15 +373,15 @@ export function SeatsPage() {
                       <div>넓이</div><div>높이</div><div>X</div><div>Y</div><div>Z</div>
                     </div>
                     <div className="mt-1 grid grid-cols-5 gap-1">
-                      <input className="input p-1 text-center" type="number" value={selected.w}
+                      <input className="input p-1 text-center" type="number" value={selected.w} readOnly={!editable}
                         onChange={(e) => updateSelected({ w: Math.max(10, +e.target.value) })} />
-                      <input className="input p-1 text-center" type="number" value={selected.h}
+                      <input className="input p-1 text-center" type="number" value={selected.h} readOnly={!editable}
                         onChange={(e) => updateSelected({ h: Math.max(10, +e.target.value) })} />
-                      <input className="input p-1 text-center" type="number" value={selected.x}
+                      <input className="input p-1 text-center" type="number" value={selected.x} readOnly={!editable}
                         onChange={(e) => updateSelected({ x: clampX(+e.target.value, selected.w) })} />
-                      <input className="input p-1 text-center" type="number" value={selected.y}
+                      <input className="input p-1 text-center" type="number" value={selected.y} readOnly={!editable}
                         onChange={(e) => updateSelected({ y: clampY(+e.target.value, selected.h) })} />
-                      <input className="input p-1 text-center" type="number" value={selected.z ?? 0}
+                      <input className="input p-1 text-center" type="number" value={selected.z ?? 0} readOnly={!editable}
                         onChange={(e) => updateSelected({ z: +e.target.value })} />
                     </div>
                   </div>
@@ -396,7 +400,6 @@ export function SeatsPage() {
               </div>
             )}
           </aside>
-        )}
       </div>
     </>
   );

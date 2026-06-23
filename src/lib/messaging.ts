@@ -1,7 +1,7 @@
 // 메시지 발송 라이브러리.
 // /api/notify/send (Vercel Edge Function) 호출. 실패 시 localStorage 로그에만 기록.
 
-export type Channel = 'sms' | 'lms' | 'kakao';
+export type Channel = 'sms' | 'lms';
 
 export interface MessageRecord {
   id: string;
@@ -34,14 +34,13 @@ export const messaging = {
   },
 
   async send({
-    to, channel, message, template, subject, templateCode,
+    to, channel, message, template, subject,
   }: {
     to: string;
     channel: Channel;
     message: string;
     template: string;          // 내부 템플릿 이름 (enter / exit / no_show / custom 등)
-    subject?: string;
-    templateCode?: string;     // 카카오 알림톡 템플릿 코드
+    subject?: string;          // LMS 제목 (선택)
   }): Promise<MessageRecord> {
     const id = `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     let rec: MessageRecord = { id, to, channel, template, message, status: 'queued', ts: Date.now() };
@@ -57,7 +56,7 @@ export const messaging = {
       const res = await fetch('/api/notify/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, channel, message, subject, templateCode }),
+        body: JSON.stringify({ to, channel, message, subject }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

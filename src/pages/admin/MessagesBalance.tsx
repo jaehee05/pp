@@ -12,7 +12,7 @@ export function MessagesBalance() {
     if (!testPhone) return alert('수신 번호를 입력하세요.');
     setSending(true);
     const rec = await messaging.send({
-      to: testPhone, channel: 'kakao', template: 'test', message: testMsg,
+      to: testPhone, channel: 'sms', template: 'test', message: testMsg,
     });
     setSending(false);
     setResult(JSON.stringify(rec, null, 2));

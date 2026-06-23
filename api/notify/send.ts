@@ -6,10 +6,9 @@ export const config = { runtime: 'edge' };
 
 interface SendRequest {
   to: string;             // 수신 번호
-  channel: 'sms' | 'lms' | 'kakao';
+  channel: 'sms' | 'lms';
   message: string;
-  subject?: string;       // LMS/MMS용 제목
-  templateCode?: string;  // 카카오 알림톡 템플릿 코드
+  subject?: string;       // LMS용 제목 (선택)
 }
 
 interface SendResult {
@@ -61,10 +60,10 @@ export default async function handler(req: Request): Promise<Response> {
     const token = tokenJson.token;
     if (!token) return json({ ok: false, error: `token field missing in response: ${tokenText.slice(0, 200)}` }, 500);
 
-    // 2) 메시지 발송
+    // 2) 메시지 발송 (문자만 — SMS/LMS).
+    //    SMS 한도(90byte, 한글 2byte)를 넘으면 자동으로 LMS로 승격.
     const messageType =
-      body.channel === 'kakao' ? 'AT' :
-      body.channel === 'lms' ? 'LMS' : 'SMS';
+      body.channel === 'lms' || smsBytes(body.message) > 90 ? 'LMS' : 'SMS';
 
     const payload: Record<string, unknown> = {
       account: username,
@@ -75,10 +74,7 @@ export default async function handler(req: Request): Promise<Response> {
       targetCount: 1,
       targets: [{ to: digits(body.to) }],
     };
-    if (messageType === 'LMS' && body.subject) payload.subject = body.subject;
-    if (messageType === 'AT' && body.templateCode) {
-      payload.kakaoOption = { templateCode: body.templateCode };
-    }
+    if (messageType === 'LMS') payload.subject = body.subject || '[합격공간] 알림';
 
     const sendRes = await fetch(SEND_URL, {
       method: 'POST',
@@ -110,6 +106,12 @@ function base64(s: string): string {
   return btoa(s);
 }
 function digits(s: string): string { return s.replace(/\D/g, ''); }
+// SMS 바이트 수 추정(EUC-KR 기준: 한글/비ASCII = 2byte, ASCII = 1byte).
+function smsBytes(s: string): number {
+  let n = 0;
+  for (const ch of s) n += ch.charCodeAt(0) > 127 ? 2 : 1;
+  return n;
+}
 function json(data: SendResult, status = 200) {
   return new Response(JSON.stringify(data), {
     status, headers: { 'Content-Type': 'application/json' },

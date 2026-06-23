@@ -12,7 +12,7 @@ export function MessagesTemplates() {
   function newOne() {
     setEditing({
       id: `t_${Date.now().toString(36)}`,
-      name: '', trigger: 'custom', channel: 'kakao', body: '', active: true,
+      name: '', trigger: 'custom', channel: 'sms', body: '', active: true,
     });
   }
 
@@ -44,7 +44,6 @@ export function MessagesTemplates() {
                   <td className="px-3 py-2 font-mono text-xs text-slate-500">{t.trigger}</td>
                   <td className="px-3 py-2 text-center">
                     <span className={
-                      t.channel === 'kakao' ? 'rounded bg-yellow-100 px-2 py-0.5 text-xs text-yellow-700' :
                       t.channel === 'lms' ? 'rounded bg-sky-100 px-2 py-0.5 text-xs text-sky-700' :
                       'rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-700'
                     }>{t.channel.toUpperCase()}</span>
@@ -94,7 +93,6 @@ function TemplateForm({ template, onClose, onSave }: { template: LocalTemplate; 
         <label>채널
           <select className="input mt-1" value={v.channel}
             onChange={(e) => setV({ ...v, channel: e.target.value as LocalTemplate['channel'] })}>
-            <option value="kakao">카카오 알림톡</option>
             <option value="sms">SMS (90byte)</option>
             <option value="lms">LMS (2000byte)</option>
           </select>
@@ -103,13 +101,6 @@ function TemplateForm({ template, onClose, onSave }: { template: LocalTemplate; 
           <textarea className="input mt-1 font-mono" rows={5} value={v.body}
             onChange={(e) => setV({ ...v, body: e.target.value })} />
         </label>
-        {v.channel === 'kakao' && (
-          <label className="col-span-2">카카오 템플릿 코드 (선택)
-            <input className="input mt-1 font-mono" value={v.templateCode ?? ''}
-              onChange={(e) => setV({ ...v, templateCode: e.target.value })}
-              placeholder="알림톡 사전 등록 템플릿 코드" />
-          </label>
-        )}
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={v.active} onChange={(e) => setV({ ...v, active: e.target.checked })} />
           활성

@@ -19,7 +19,7 @@ export function MessagesHistory() {
     <>
       <PageHeader
         title="발송 이력"
-        desc="자동 발송된 알림톡·SMS 이력입니다. 3초마다 갱신."
+        desc="자동 발송된 문자(SMS/LMS) 이력입니다. 3초마다 갱신."
         actions={
           <div className="rounded-md bg-slate-100 p-0.5 text-sm">
             {(['all', 'sent', 'mock', 'failed'] as const).map((f) => (

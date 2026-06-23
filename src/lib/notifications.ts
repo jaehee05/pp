@@ -8,13 +8,13 @@ export const notify = {
   enter(s: LocalStudent) {
     if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
       void messaging.send({
-        to: s.phone, channel: 'kakao', template: 'enter_student',
+        to: s.phone, channel: 'sms', template: 'enter_student',
         message: `[합격공간] ${s.name}님 입실했습니다.`,
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       void messaging.send({
-        to: s.parentPhone, channel: 'kakao', template: 'enter_parent',
+        to: s.parentPhone, channel: 'sms', template: 'enter_parent',
         message: `[합격공간] ${s.name} 학생이 입실했습니다.`,
       });
     }
@@ -22,13 +22,13 @@ export const notify = {
   exit(s: LocalStudent) {
     if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
       void messaging.send({
-        to: s.phone, channel: 'kakao', template: 'exit_student',
+        to: s.phone, channel: 'sms', template: 'exit_student',
         message: `[합격공간] ${s.name}님 퇴실했습니다.`,
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       void messaging.send({
-        to: s.parentPhone, channel: 'kakao', template: 'exit_parent',
+        to: s.parentPhone, channel: 'sms', template: 'exit_parent',
         message: `[합격공간] ${s.name} 학생이 퇴실했습니다.`,
       });
     }
@@ -36,7 +36,7 @@ export const notify = {
   noShow(s: LocalStudent, scheduledStart: string) {
     if (s.notify.parentLateMiss && s.parentMsgReceive !== false && s.parentPhone) {
       void messaging.send({
-        to: s.parentPhone, channel: 'kakao', template: 'no_show',
+        to: s.parentPhone, channel: 'sms', template: 'no_show',
         message: `[합격공간] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.`,
       });
     }

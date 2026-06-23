@@ -170,7 +170,7 @@ export interface StudyPlanItem {
 export interface NotificationJob {
   id: ID;
   studentId: ID;
-  channel: 'kakao' | 'sms';
+  channel: 'sms' | 'lms';
   template: 'enter' | 'exit' | 'no_show' | 'custom';
   toPhone: string;
   payload: Record<string, string | number>;

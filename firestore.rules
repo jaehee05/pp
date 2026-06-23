@@ -1,0 +1,19 @@
+rules_version = '2';
+
+// ⚠️ 보안 경고 ⚠️
+// 이 앱의 로그인은 현재 클라이언트 사이드(localStorage 기반)라 Firestore가
+// 사용자 인증(request.auth)을 알 수 없습니다. 아래 규칙은 appState 컬렉션을
+// "누구나 읽고 쓸 수 있게" 열어둡니다 — 프로젝트 ID만 알면(클라이언트 번들에
+// 공개됨) 비밀번호 해시 포함 모든 데이터에 접근 가능합니다.
+//
+// 운영 전 반드시 Firebase Auth로 전환하고 아래 규칙을
+//   allow read, write: if request.auth != null;
+// 형태로 조여야 합니다.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /appState/{doc} {
+      allow read, write: if true;
+    }
+  }
+}

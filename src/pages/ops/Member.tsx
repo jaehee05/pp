@@ -30,6 +30,25 @@ export function OpsMember() {
   const att = useAttendance();
   const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription, updateSubscription, removeSubscription } = usePlans();
   const [editSubId, setEditSubId] = useState<string | null>(null);
+
+  // 회원 정보 편집 모드 — false 면 read-only, true 면 draft에 임시 보관 후 [수정 완료]로 일괄 저장
+  type SDraft = Partial<NonNullable<typeof student>>;
+  const [editMode, setEditMode] = useState(false);
+  const [draft, setDraft] = useState<SDraft>({});
+  function startEdit() {
+    if (!student) return;
+    setDraft({ ...student });
+    setEditMode(true);
+  }
+  function cancelEdit() { setDraft({}); setEditMode(false); }
+  function saveEdit() {
+    if (!student) return;
+    update(student.id, draft);
+    setDraft({}); setEditMode(false);
+  }
+  const v: SDraft = editMode ? draft : (student ?? {});
+  const setDraftField = <K extends keyof SDraft>(k: K, val: SDraft[K]) =>
+    setDraft((prev) => ({ ...prev, [k]: val }));
   const [memo, setMemo] = useState(student?.memo ?? '');
   const [tab, setTab] = useState<LogTab>('member');
   const [enrolling, setEnrolling] = useState(false);
@@ -251,85 +270,104 @@ export function OpsMember() {
           <h3 className="mb-4 font-semibold">기본 회원 정보</h3>
           <div className="grid grid-cols-12 gap-x-6 gap-y-4 text-sm">
             <Field label="성함" col={4}>
-              <input className="input" value={student.name}
-                onChange={(e) => update(student.id, { name: e.target.value })} />
+              <input className="input" value={v?.name ?? ''} readOnly={!editMode}
+                onChange={(e) => setDraftField('name', e.target.value)} />
             </Field>
-            <Field label="" col={2}>
-              <div className="flex h-9 items-center gap-1">
-                <span className={`rounded px-2 py-1 text-xs ${student.gender === 'M' ? 'bg-sky-100 text-sky-700' : student.gender === 'F' ? 'bg-pink-100 text-pink-700' : 'bg-slate-100 text-slate-500'}`}>
-                  {student.gender === 'M' ? '♂ 남' : student.gender === 'F' ? '♀ 여' : '미정'}
-                </span>
-              </div>
+            <Field label="성별" col={2}>
+              {editMode ? (
+                <select className="input" value={v?.gender ?? ''}
+                  onChange={(e) => setDraftField('gender', (e.target.value || undefined) as 'M' | 'F' | undefined)}>
+                  <option value="">미정</option>
+                  <option value="M">♂ 남</option>
+                  <option value="F">♀ 여</option>
+                </select>
+              ) : (
+                <div className="flex h-9 items-center gap-1">
+                  <span className={`rounded px-2 py-1 text-xs ${v?.gender === 'M' ? 'bg-sky-100 text-sky-700' : v?.gender === 'F' ? 'bg-pink-100 text-pink-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {v?.gender === 'M' ? '♂ 남' : v?.gender === 'F' ? '♀ 여' : '미정'}
+                  </span>
+                </div>
+              )}
             </Field>
             <Field label="연락처" col={4}>
-              <input className="input" value={student.phone}
-                onChange={(e) => update(student.id, { phone: e.target.value })} />
+              <input className="input" value={v?.phone ?? ''} readOnly={!editMode}
+                onChange={(e) => setDraftField('phone', e.target.value)} />
             </Field>
             <Field label="메시지 수신" col={2}>
               <label className="flex h-9 items-center gap-2">
-                <input type="checkbox" className="accent-brand-600" checked={!!student.msgReceive}
-                  onChange={(e) => update(student.id, { msgReceive: e.target.checked })} />
+                <input type="checkbox" className="accent-brand-600" checked={!!v?.msgReceive} disabled={!editMode}
+                  onChange={(e) => setDraftField('msgReceive', e.target.checked)} />
                 수신
               </label>
             </Field>
 
             <Field label="" col={2}>
-              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50">정상회원</button>
+              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50" disabled>정상회원</button>
             </Field>
             <Field label="" col={2}>
-              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50"
-                onClick={student.fingerprintId ? deleteFp : startEnroll} disabled={enrolling}>
+              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={student.fingerprintId ? deleteFp : startEnroll} disabled={enrolling || editMode}>
                 {student.fingerprintId ? '◉ 지문삭제' : enrolling ? '대기 중…' : '◯ 지문등록'}
               </button>
             </Field>
             <Field label="PIN번호" col={4}>
-              <input className="input font-mono" maxLength={4} value={student.pin ?? ''}
-                onChange={(e) => update(student.id, { pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
+              <input className="input font-mono" maxLength={4} value={v?.pin ?? ''} readOnly={!editMode}
+                onChange={(e) => setDraftField('pin', e.target.value.replace(/\D/g, '').slice(0, 4))} />
             </Field>
             <div className="col-span-4" />
 
             <Field label="생년월일" col={4}>
-              <input className="input" type="date" value={student.birthYmd ?? ''}
-                onChange={(e) => update(student.id, { birthYmd: e.target.value })} />
+              <input className="input" type="date" value={v?.birthYmd ?? ''} readOnly={!editMode}
+                onChange={(e) => setDraftField('birthYmd', e.target.value)} />
             </Field>
             <Field label="회원 구분" col={2}>
-              <select className="input" value={student.memberKind ?? 'student'}
-                onChange={(e) => update(student.id, { memberKind: e.target.value as 'student' | 'adult' })}>
+              <select className="input" value={v?.memberKind ?? 'student'} disabled={!editMode}
+                onChange={(e) => setDraftField('memberKind', e.target.value as 'student' | 'adult')}>
                 <option value="student">학생</option>
                 <option value="adult">성인</option>
               </select>
             </Field>
             <Field label="사물함" col={3}>
-              <input className="input" value={student.lockerId ?? ''} placeholder="없음"
-                onChange={(e) => update(student.id, { lockerId: e.target.value })} />
+              <input className="input" value={v?.lockerId ?? ''} placeholder="없음" readOnly={!editMode}
+                onChange={(e) => setDraftField('lockerId', e.target.value)} />
             </Field>
             <Field label="신발장" col={3}>
-              <input className="input" value={student.shoeId ?? ''} placeholder="없음"
-                onChange={(e) => update(student.id, { shoeId: e.target.value })} />
+              <input className="input" value={v?.shoeId ?? ''} placeholder="없음" readOnly={!editMode}
+                onChange={(e) => setDraftField('shoeId', e.target.value)} />
             </Field>
 
             <Field label="보호자" col={4}>
               <input className="input" placeholder="이름" disabled />
             </Field>
             <Field label="보호자 연락처" col={6}>
-              <input className="input" value={student.parentPhone ?? ''}
-                onChange={(e) => update(student.id, { parentPhone: e.target.value })} />
+              <input className="input" value={v?.parentPhone ?? ''} readOnly={!editMode}
+                onChange={(e) => setDraftField('parentPhone', e.target.value)} />
             </Field>
             <Field label="메시지 수신" col={2}>
               <label className="flex h-9 items-center gap-2">
-                <input type="checkbox" className="accent-brand-600" checked={!!student.parentMsgReceive}
-                  onChange={(e) => update(student.id, { parentMsgReceive: e.target.checked })} />
+                <input type="checkbox" className="accent-brand-600" checked={!!v?.parentMsgReceive} disabled={!editMode}
+                  onChange={(e) => setDraftField('parentMsgReceive', e.target.checked)} />
                 수신
               </label>
             </Field>
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
-            <button className={`rounded-md px-4 py-2 text-sm font-semibold ${inside ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-brand-600 text-white hover:bg-brand-700'}`}
-              onClick={toggleIn}>
+            <button className={`rounded-md px-4 py-2 text-sm font-semibold ${inside ? 'bg-rose-600 text-white hover:bg-rose-700' : 'bg-brand-600 text-white hover:bg-brand-700'} disabled:bg-slate-200 disabled:text-slate-500`}
+              onClick={toggleIn} disabled={editMode}>
               {inside ? '퇴실' : '입실'}
             </button>
-            <button className="rounded-md bg-white px-4 py-2 text-sm font-semibold ring-1 ring-slate-300 hover:bg-slate-100">회원수정</button>
+            {editMode ? (
+              <>
+                <button className="rounded-md bg-white px-4 py-2 text-sm font-semibold ring-1 ring-slate-300 hover:bg-slate-100"
+                  onClick={cancelEdit}>취소</button>
+                <button className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                  onClick={saveEdit}>✓ 수정 완료</button>
+              </>
+            ) : (
+              <button className="rounded-md bg-white px-4 py-2 text-sm font-semibold ring-1 ring-slate-300 hover:bg-slate-100"
+                onClick={startEdit}>회원수정</button>
+            )}
           </div>
         </section>
 

@@ -28,7 +28,8 @@ export function OpsMember() {
   const student = useStudents((s) => s.get(id));
   const update = useStudents((s) => s.update);
   const att = useAttendance();
-  const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription } = usePlans();
+  const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription, updateSubscription, removeSubscription } = usePlans();
+  const [editSubId, setEditSubId] = useState<string | null>(null);
   const [memo, setMemo] = useState(student?.memo ?? '');
   const [tab, setTab] = useState<LogTab>('member');
   const [enrolling, setEnrolling] = useState(false);
@@ -587,6 +588,7 @@ export function OpsMember() {
                 <th className="px-2 py-2 text-center">시작일</th>
                 <th className="px-2 py-2 text-center">종료일</th>
                 <th className="px-2 py-2 text-right">금액</th>
+                <th className="px-2 py-2 text-right">관리</th>
               </tr>
             </thead>
             <tbody>
@@ -594,20 +596,87 @@ export function OpsMember() {
                 <tr key={s.id} className="border-t border-slate-100">
                   <td className="px-2 py-2">{s.planSnapshot.name}</td>
                   <td className="px-2 py-2 text-center">
-                    <span className={
-                      s.status === 'active' ? 'rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700' :
-                      s.status === 'expired' ? 'rounded bg-slate-100 px-2 py-0.5 text-xs text-slate-500' :
-                      'rounded bg-rose-100 px-2 py-0.5 text-xs text-rose-700'
-                    }>{s.status === 'active' ? '이용중' : s.status === 'expired' ? '만료' : '환불'}</span>
+                    <select className="rounded border border-slate-200 px-1 py-0.5 text-xs"
+                      value={s.status}
+                      onChange={(e) => updateSubscription(s.id, { status: e.target.value as 'active' | 'expired' | 'refunded' })}>
+                      <option value="active">이용중</option>
+                      <option value="expired">만료</option>
+                      <option value="refunded">환불</option>
+                    </select>
                   </td>
-                  <td className="px-2 py-2 text-center text-xs">{new Date(s.startAt).toISOString().slice(0, 10)}</td>
-                  <td className="px-2 py-2 text-center text-xs">{s.endAt ? new Date(s.endAt).toISOString().slice(0, 10) : '-'}</td>
-                  <td className="px-2 py-2 text-right font-mono">{fmtMoney(s.planSnapshot.price)}</td>
+                  <td className="px-2 py-2 text-center text-xs">
+                    <input className="rounded border border-slate-200 px-1 py-0.5 text-xs" type="date"
+                      value={new Date(s.startAt).toISOString().slice(0, 10)}
+                      onChange={(e) => updateSubscription(s.id, { startAt: new Date(e.target.value).getTime() })} />
+                  </td>
+                  <td className="px-2 py-2 text-center text-xs">
+                    <input className="rounded border border-slate-200 px-1 py-0.5 text-xs" type="date"
+                      value={s.endAt ? new Date(s.endAt).toISOString().slice(0, 10) : ''}
+                      onChange={(e) => updateSubscription(s.id, { endAt: e.target.value ? new Date(e.target.value).getTime() : undefined })} />
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <input className="w-24 rounded border border-slate-200 px-1 py-0.5 text-right font-mono text-xs" type="number" step={100}
+                      value={s.planSnapshot.price}
+                      onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, price: +e.target.value } })} />
+                  </td>
+                  <td className="px-2 py-2 text-right">
+                    <button className="rounded bg-white px-2 py-0.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+                      onClick={() => setEditSubId(s.id === editSubId ? null : s.id)}>
+                      {editSubId === s.id ? '닫기' : '상세'}
+                    </button>
+                    <button className="ml-1 rounded bg-rose-50 px-2 py-0.5 text-xs text-rose-600 hover:bg-rose-100"
+                      onClick={() => { if (confirm(`"${s.planSnapshot.name}" 이용권을 삭제할까요?`)) removeSubscription(s.id); }}>
+                      삭제
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        {editSubId && (() => {
+          const s = allSubs.find((x) => x.id === editSubId);
+          if (!s) return null;
+          return (
+            <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm">
+              <div className="mb-2 text-xs font-semibold text-slate-600">상세 편집</div>
+              <div className="grid grid-cols-2 gap-3">
+                <label>이용권 이름
+                  <input className="input mt-1" value={s.planSnapshot.name}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, name: e.target.value } })} />
+                </label>
+                <label>유형
+                  <select className="input mt-1" value={s.planSnapshot.type}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, type: e.target.value as 'period' | 'hours' | 'count' } })}>
+                    <option value="period">기간권</option>
+                    <option value="hours">시간권</option>
+                    <option value="count">회차권</option>
+                  </select>
+                </label>
+                <label>기간(일)
+                  <input className="input mt-1" type="number" min={1} value={s.planSnapshot.durationDays ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, durationDays: +e.target.value } })} />
+                </label>
+                <label>시간(h)
+                  <input className="input mt-1" type="number" min={0} value={s.planSnapshot.hours ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, hours: +e.target.value } })} />
+                </label>
+                <label>회차
+                  <input className="input mt-1" type="number" min={0} value={s.planSnapshot.counts ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, counts: +e.target.value } })} />
+                </label>
+                <label>잔여 시간(h)
+                  <input className="input mt-1" type="number" min={0} value={s.hoursRemaining ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { hoursRemaining: +e.target.value })} />
+                </label>
+                <label>잔여 회차
+                  <input className="input mt-1" type="number" min={0} value={s.countsRemaining ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { countsRemaining: +e.target.value })} />
+                </label>
+              </div>
+            </div>
+          );
+        })()}
       </Modal>
 
       {/* 기타결제 / 할인 추가 모달 */}

@@ -189,8 +189,12 @@ export function BulkImportPage() {
         });
       }
 
-      // 좌석 매칭 (label로)
-      const seat = seats.find((s) => s.type === 'seat' && s.label === r.seatLabel && !s.assignedStudentId);
+      // 좌석 매칭 (label을 숫자로 정규화 — "01"과 "1" 동일 취급)
+      const targetNum = parseInt(r.seatLabel, 10);
+      const seat = seats.find((s) =>
+        s.type === 'seat' && !s.assignedStudentId &&
+        !isNaN(targetNum) && parseInt(s.label, 10) === targetNum,
+      );
       if (seat) {
         seat.assignedStudentId = studentId;
         const history = seat.assignmentHistory ?? [];

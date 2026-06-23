@@ -17,6 +17,8 @@ interface State {
   addPayment: (p: Omit<LocalPay, 'id' | 'createdAt'>) => string;
   setPaymentApproved: (id: string, fields: Partial<LocalPay>) => void;
   addSubscription: (s: Omit<LocalSub, 'id'>) => string;
+  updateSubscription: (id: string, patch: Partial<LocalSub>) => void;
+  removeSubscription: (id: string) => void;
 }
 
 const DEFAULT_PLANS: LocalPlan[] = [
@@ -72,6 +74,18 @@ export const usePlans = create<State>()(
         set((st) => ({ subs: [item, ...st.subs] }));
         return id;
       },
+      updateSubscription: (id, patch) => set((st) => ({
+        subs: st.subs.map((s) => {
+          if (s.id !== id) return s;
+          const merged = { ...s, ...patch };
+          // planSnapshot은 얕은 머지 (필드 단위)
+          if (patch.planSnapshot) {
+            merged.planSnapshot = { ...s.planSnapshot, ...patch.planSnapshot };
+          }
+          return merged;
+        }),
+      })),
+      removeSubscription: (id) => set((st) => ({ subs: st.subs.filter((s) => s.id !== id) })),
     }),
     { name: 'pp.plans.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 
 interface State {
   brand: string;        // "합격공간"
@@ -16,6 +17,6 @@ export const useBranding = create<State>()(
       managerName: '매니저1',
       setStoreName: (s) => set({ storeName: s }),
     }),
-    { name: 'pp.brand.v1' },
+    { name: 'pp.brand.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );

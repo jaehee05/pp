@@ -13,15 +13,19 @@ import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
 import { OpsStub } from './pages/ops/Stub';
 import { KioskPage } from './pages/Kiosk';
+import { LoginPage } from './pages/Login';
+import { AccountPage } from './pages/admin/Account';
+import { RequireAuth } from './components/AuthGate';
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/kiosk" element={<KioskPage />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
 
-        <Route path="/admin" element={<AdminLayout />}>
+        <Route path="/admin" element={<RequireAuth><AdminLayout /></RequireAuth>}>
           <Route index element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="members" element={<MembersAdmin />} />
@@ -31,6 +35,7 @@ export default function App() {
           <Route path="store/info" element={<SimpleStub title="매장 정보" />} />
           <Route path="store/managers" element={<SimpleStub title="매니저 관리" />} />
           <Route path="store/hours" element={<SimpleStub title="운영 시간" />} />
+          <Route path="account" element={<AccountPage />} />
           <Route path="seat-plans" element={<PlansPage category="seat" />} />
           <Route path="room-plans" element={<PlansPage category="room" />} />
           <Route path="messages/templates" element={<MessagesTemplates />} />
@@ -40,7 +45,7 @@ export default function App() {
           <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
         </Route>
 
-        <Route path="/ops" element={<OpsLayout />}>
+        <Route path="/ops" element={<RequireAuth><OpsLayout /></RequireAuth>}>
           <Route index element={<Navigate to="/ops/layout" replace />} />
           <Route path="layout" element={<SeatsPage editable={false} />} />
           <Route path="rooms" element={<OpsStub title="룸 운영" />} />

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 import type { Plan, Subscription, Payment } from '../lib/types';
 
 type LocalPlan = Plan;
@@ -50,6 +51,6 @@ export const usePlans = create<State>()(
         return id;
       },
     }),
-    { name: 'pp.plans.v1' },
+    { name: 'pp.plans.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );

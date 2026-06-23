@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 import type { WeekdayKey } from '../lib/types';
 
 interface LocalPlanItem {
@@ -29,7 +30,7 @@ export const useSchedule = create<State>()(
       update: (id, patch) => set((st) => ({ items: st.items.map((x) => (x.id === id ? { ...x, ...patch } : x)) })),
       remove: (id) => set((st) => ({ items: st.items.filter((x) => x.id !== id) })),
     }),
-    { name: 'pp.schedule.v1' },
+    { name: 'pp.schedule.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );
 

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 import type { Student, WeekdayKey } from '../lib/types';
 
 type LocalStudent = Omit<Student, 'joinedAt' | 'pointsTotal'> & {
@@ -43,7 +44,7 @@ export const useStudents = create<State>()(
       remove: (id) => set((st) => ({ list: st.list.filter((x) => x.id !== id) })),
       get: (id) => get().list.find((x) => x.id === id),
     }),
-    { name: 'pp.students.v1' },
+    { name: 'pp.students.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );
 

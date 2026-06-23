@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 
 export interface LocalTemplate {
   id: string;
@@ -40,6 +41,6 @@ export const useTemplates = create<State>()(
       }),
       remove: (id) => set((st) => ({ list: st.list.filter((x) => x.id !== id) })),
     }),
-    { name: 'pp.msgTemplates.v1' },
+    { name: 'pp.msgTemplates.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );

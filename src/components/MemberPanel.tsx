@@ -6,7 +6,7 @@ import { usePlans } from '../store/plans';
 
 type Tab = 'members' | 'memberLogs' | 'paymentLogs';
 
-export function MemberPanel() {
+export function MemberPanel({ onClose }: { onClose?: () => void } = {}) {
   const [tab, setTab] = useState<Tab>('members');
   const [q, setQ] = useState('');
   const students = useStudents((s) => s.list);
@@ -22,14 +22,21 @@ export function MemberPanel() {
   }, [q, students]);
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col border-l border-slate-200 bg-white">
-      <div className="border-b border-slate-200 p-3">
+    <aside className="flex h-full w-[85vw] max-w-xs shrink-0 flex-col border-l border-slate-200 bg-white sm:w-80">
+      <div className="flex items-center gap-2 border-b border-slate-200 p-3">
         <input
           className="input"
           placeholder="이름/전화번호로 검색하세요"
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
+        {onClose && (
+          <button
+            onClick={onClose}
+            aria-label="회원 패널 닫기"
+            className="shrink-0 rounded-md p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+          >✕</button>
+        )}
       </div>
       <div className="flex border-b border-slate-200 text-sm">
         {(['members', 'memberLogs', 'paymentLogs'] as Tab[]).map((t) => (
@@ -60,6 +67,7 @@ export function MemberPanel() {
                 <li key={s.id}>
                   <NavLink
                     to={`/ops/member/${s.id}`}
+                    onClick={onClose}
                     className={({ isActive }) =>
                       `block px-3 py-3 transition ${isActive ? 'bg-brand-50' : 'hover:bg-slate-50'}`
                     }
@@ -91,7 +99,7 @@ export function MemberPanel() {
               const s = students.find((x) => x.id === l.studentId);
               return (
                 <li key={l.id} className="px-3 py-2">
-                  <button className="text-slate-600 hover:text-brand-700" onClick={() => s && nav(`/ops/member/${s.id}`)}>
+                  <button className="text-slate-600 hover:text-brand-700" onClick={() => { if (s) { nav(`/ops/member/${s.id}`); onClose?.(); } }}>
                     {new Date(l.at).toLocaleString('ko-KR', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     {' · '}<b className="text-slate-900">{s?.name ?? '?'}</b> {l.type === 'enter' ? '입실' : l.type === 'exit' ? '퇴실' : l.type === 'leave_temp' ? '외출' : '복귀'}
                   </button>

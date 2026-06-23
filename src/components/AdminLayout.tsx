@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
       { to: '/admin/store/info', label: '매장 정보' },
       { to: '/admin/store/managers', label: '매니저 관리' },
       { to: '/admin/store/hours', label: '운영 시간' },
+      { to: '/admin/account', label: '관리자 계정' },
     ],
   },
   { to: '/admin/seat-plans', label: '좌석 이용권 관리', icon: '🎫' },
@@ -44,13 +45,24 @@ const NAV: NavItem[] = [
 ];
 
 export function AdminLayout() {
+  const [drawer, setDrawer] = useState(false);
+  const close = () => setDrawer(false);
+
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
-      <AppHeader />
-      <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white">
+      <AppHeader onMenu={() => setDrawer(true)} />
+      <div className="relative flex flex-1 overflow-hidden">
+        {/* 모바일 백드롭 */}
+        {drawer && (
+          <div className="fixed inset-0 top-14 z-30 bg-black/30 md:hidden" onClick={close} />
+        )}
+        <aside
+          className={`fixed inset-y-0 left-0 top-14 z-40 flex w-60 shrink-0 transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 md:static md:top-0 md:translate-x-0 ${
+            drawer ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
           <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
-            {NAV.map((n) => <NavGroup key={n.label} item={n} />)}
+            {NAV.map((n) => <NavGroup key={n.label} item={n} onNavigate={close} />)}
           </nav>
         </aside>
         <main className="flex-1 overflow-auto bg-slate-50">
@@ -61,12 +73,13 @@ export function AdminLayout() {
   );
 }
 
-function NavGroup({ item }: { item: NavItem }) {
+function NavGroup({ item, onNavigate }: { item: NavItem; onNavigate: () => void }) {
   const [open, setOpen] = useState(true);
   if (item.to) {
     return (
       <NavLink
         to={item.to}
+        onClick={onNavigate}
         className={({ isActive }) =>
           `flex items-center gap-2 rounded-md px-3 py-2 text-sm transition ${
             isActive ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-700 hover:bg-slate-100'
@@ -91,6 +104,7 @@ function NavGroup({ item }: { item: NavItem }) {
             <NavLink
               key={c.to}
               to={c.to}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 `block rounded-md px-3 py-1.5 text-[13px] transition ${
                   isActive ? 'bg-brand-50 font-semibold text-brand-700' : 'text-slate-600 hover:bg-slate-50'

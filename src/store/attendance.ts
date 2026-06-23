@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 import type { AttendanceLog, AttendanceState } from '../lib/types';
 import { notify } from '../lib/notifications';
 import { useStudents } from './students';
@@ -70,6 +71,6 @@ export const useAttendance = create<State>()(
         append(set, log, st);
       },
     }),
-    { name: 'pp.attendance.v1' },
+    { name: 'pp.attendance.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );

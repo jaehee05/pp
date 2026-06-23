@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { firestoreStorage } from '../lib/firestoreStorage';
 
 interface LocalPoint {
   id: string;
@@ -25,7 +26,7 @@ export const usePoints = create<State>()(
       })),
       remove: (id) => set((st) => ({ entries: st.entries.filter((x) => x.id !== id) })),
     }),
-    { name: 'pp.points.v1' },
+    { name: 'pp.points.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),
 );
 

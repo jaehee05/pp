@@ -13,6 +13,7 @@ interface State {
   pays: LocalPay[];
   upsertPlan: (p: LocalPlan) => void;
   removePlan: (id: string) => void;
+  movePlan: (id: string, delta: number) => void;
   addPayment: (p: Omit<LocalPay, 'id' | 'createdAt'>) => string;
   setPaymentApproved: (id: string, fields: Partial<LocalPay>) => void;
   addSubscription: (s: Omit<LocalSub, 'id'>) => string;
@@ -36,6 +37,27 @@ export const usePlans = create<State>()(
         return { plans: exists ? st.plans.map((x) => (x.id === p.id ? p : x)) : [...st.plans, p] };
       }),
       removePlan: (id) => set((st) => ({ plans: st.plans.filter((p) => p.id !== id) })),
+      movePlan: (id, delta) => set((st) => {
+        const i = st.plans.findIndex((p) => p.id === id);
+        if (i < 0 || delta === 0) return st;
+        const plan = st.plans[i];
+        const dir = delta > 0 ? 1 : -1;
+        let remaining = Math.abs(delta);
+        let j = i;
+        // 같은 category 내에서만 이동
+        while (remaining > 0) {
+          let k = j + dir;
+          while (k >= 0 && k < st.plans.length && st.plans[k].category !== plan.category) k += dir;
+          if (k < 0 || k >= st.plans.length) break;
+          j = k;
+          remaining--;
+        }
+        if (j === i) return st;
+        const arr = [...st.plans];
+        arr.splice(i, 1);
+        arr.splice(j, 0, plan);
+        return { plans: arr };
+      }),
       addPayment: (p) => {
         const id = `pay_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
         const item: LocalPay = { id, createdAt: Date.now(), ...p };

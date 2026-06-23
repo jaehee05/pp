@@ -50,14 +50,14 @@ export const notify = {
       dispatch({
         to: s.phone, name: s.name, trigger: 'enter_student',
         templateCode: cfg.templateEnter, smsBody,
-        changeWord: { '#{var1}': time, '#{var2}': notice },
+        changeWord: { var1: time, var2: notice },
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       dispatch({
         to: s.parentPhone, name: s.name, trigger: 'enter_parent',
         templateCode: cfg.templateEnter, smsBody,
-        changeWord: { '#{var1}': time, '#{var2}': notice },
+        changeWord: { var1: time, var2: notice },
       });
     }
   },
@@ -70,14 +70,14 @@ export const notify = {
       dispatch({
         to: s.phone, name: s.name, trigger: 'exit_student',
         templateCode: cfg.templateExit, smsBody,
-        changeWord: { '#{var1}': time, '#{var2}': notice },
+        changeWord: { var1: time, var2: notice },
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       dispatch({
         to: s.parentPhone, name: s.name, trigger: 'exit_parent',
         templateCode: cfg.templateExit, smsBody,
-        changeWord: { '#{var1}': time, '#{var2}': notice },
+        changeWord: { var1: time, var2: notice },
       });
     }
   },
@@ -89,7 +89,7 @@ export const notify = {
       dispatch({
         to: s.parentPhone, name: s.name, trigger: 'no_show',
         templateCode: cfg.templateNoShow, smsBody,
-        changeWord: { '#{var1}': scheduledStart, '#{var2}': notice },
+        changeWord: { var1: scheduledStart, var2: notice },
       });
     }
   },

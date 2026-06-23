@@ -17,6 +17,7 @@ function nowHHmm() {
 
 function dispatch(opts: {
   to?: string;
+  name: string;             // 수신자 이름 (알림톡 [*이름*])
   smsBody: string;          // SMS fallback 본문
   trigger: string;          // template name (로그/이력용)
   templateCode: string;     // 알림톡 템플릿 코드
@@ -28,6 +29,7 @@ function dispatch(opts: {
   const useKakao = cfg.channel === 'kakao' && !!opts.templateCode;
   void messaging.send({
     to: opts.to,
+    name: opts.name,
     channel: useKakao ? 'kakao' : 'sms',
     template: opts.trigger,
     message: opts.smsBody,
@@ -46,16 +48,16 @@ export const notify = {
     const smsBody = `[합격공간] ${s.name} 학생이 ${time}에 입실하였습니다.${notice ? '\n\n' + notice : ''}`;
     if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
       dispatch({
-        to: s.phone, trigger: 'enter_student',
+        to: s.phone, name: s.name, trigger: 'enter_student',
         templateCode: cfg.templateEnter, smsBody,
-        changeWord: { '이름': s.name, '1': time, '2': notice },
+        changeWord: { '1': time, '2': notice },
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       dispatch({
-        to: s.parentPhone, trigger: 'enter_parent',
+        to: s.parentPhone, name: s.name, trigger: 'enter_parent',
         templateCode: cfg.templateEnter, smsBody,
-        changeWord: { '이름': s.name, '1': time, '2': notice },
+        changeWord: { '1': time, '2': notice },
       });
     }
   },
@@ -66,16 +68,16 @@ export const notify = {
     const smsBody = `[합격공간] ${s.name} 학생이 ${time}에 퇴실하였습니다.${notice ? '\n\n' + notice : ''}`;
     if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
       dispatch({
-        to: s.phone, trigger: 'exit_student',
+        to: s.phone, name: s.name, trigger: 'exit_student',
         templateCode: cfg.templateExit, smsBody,
-        changeWord: { '이름': s.name, '1': time, '2': notice },
+        changeWord: { '1': time, '2': notice },
       });
     }
     if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
       dispatch({
-        to: s.parentPhone, trigger: 'exit_parent',
+        to: s.parentPhone, name: s.name, trigger: 'exit_parent',
         templateCode: cfg.templateExit, smsBody,
-        changeWord: { '이름': s.name, '1': time, '2': notice },
+        changeWord: { '1': time, '2': notice },
       });
     }
   },
@@ -85,9 +87,9 @@ export const notify = {
     const smsBody = `[합격공간] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.${notice ? '\n\n' + notice : ''}`;
     if (s.notify.parentLateMiss && s.parentMsgReceive !== false && s.parentPhone) {
       dispatch({
-        to: s.parentPhone, trigger: 'no_show',
+        to: s.parentPhone, name: s.name, trigger: 'no_show',
         templateCode: cfg.templateNoShow, smsBody,
-        changeWord: { '이름': s.name, '1': scheduledStart, '2': notice },
+        changeWord: { '1': scheduledStart, '2': notice },
       });
     }
   },

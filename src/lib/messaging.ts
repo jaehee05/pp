@@ -34,15 +34,16 @@ export const messaging = {
   },
 
   async send({
-    to, channel, message, template, subject, templateCode, changeWord, messageType,
+    to, name, channel, message, template, subject, templateCode, changeWord, messageType,
   }: {
     to: string;
+    name?: string;               // 수신자 이름 (알림톡 [*이름*] 자동 치환용)
     channel: Channel;
     message: string;
     template: string;            // 내부 트리거 이름 (enter / exit / no_show / custom)
     subject?: string;            // LMS 제목
     templateCode?: string;       // 알림톡 템플릿 코드 (channel=kakao 시 필수)
-    changeWord?: Record<string, string>; // 알림톡 변수 치환
+    changeWord?: Record<string, string>; // 알림톡 변수 치환 ('이름' 키는 자동 제외)
     messageType?: 'ALT' | 'ALH' | 'ALI'; // 알림톡 유형 (기본 ALH 강조형)
   }): Promise<MessageRecord> {
     const id = `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
@@ -59,7 +60,7 @@ export const messaging = {
       const res = await fetch('/api/notify/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, channel, message, subject, templateCode, changeWord, messageType }),
+        body: JSON.stringify({ to, name, channel, message, subject, templateCode, changeWord, messageType }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {

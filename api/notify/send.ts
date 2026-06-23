@@ -17,6 +17,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 
 interface SendRequest {
   to: string;
+  name?: string;             // 수신자 이름 (알림톡 [*이름*] 자동 치환용)
   channel: 'sms' | 'lms' | 'kakao';
   message: string;
   subject?: string;
@@ -101,8 +102,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (wantsKakao) {
       // 알림톡: from/content 사용 안 함. senderProfile + templateCode + changeWord
-      const target: Record<string, unknown> = { to: digits(body.to) };
-      if (body.changeWord) target.changeWord = body.changeWord;
+      // [*이름*]은 target.name 에서 자동 치환되므로 changeWord에서 제외
+      const target: Record<string, unknown> = { to: digits(body.to), name: body.name ?? '' };
+      if (body.changeWord) {
+        const filtered: Record<string, string> = {};
+        for (const [k, v] of Object.entries(body.changeWord)) {
+          if (k === '이름' || k === 'name') continue;
+          filtered[k] = v;
+        }
+        if (Object.keys(filtered).length > 0) target.changeWord = filtered;
+      }
       payload = {
         account: username,
         messageType,

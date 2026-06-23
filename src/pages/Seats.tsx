@@ -306,6 +306,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
           </div>
         </div>
 
+        {editable && (
         <aside className="w-72 shrink-0 border-l border-slate-200 bg-white p-4">
             {!selected ? (
               <div>
@@ -401,6 +402,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
               </div>
             )}
           </aside>
+        )}
       </div>
     </>
   );

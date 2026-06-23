@@ -63,8 +63,14 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   try {
-    const token = await getToken(proxyUrl, proxySecret, username, apiKey);
-    if (!token) return json({ ok: false, error: '토큰 발급 실패' }, 500);
+    const tokenRes = await getToken(proxyUrl, proxySecret, username, apiKey);
+    if (typeof tokenRes !== 'string') {
+      return json({
+        ok: false,
+        error: `토큰 발급 실패 — proxy ${tokenRes.status}: ${JSON.stringify(tokenRes.body).slice(0, 400)}`,
+      }, 500);
+    }
+    const token = tokenRes;
 
     const wantsKakao = body.channel === 'kakao' && !!body.templateCode;
     if (wantsKakao && !senderProfile) {
@@ -114,12 +120,14 @@ export default async function handler(req: Request): Promise<Response> {
   }
 }
 
-async function getToken(proxyUrl: string, proxySecret: string, username: string, apiKey: string): Promise<string | null> {
+async function getToken(
+  proxyUrl: string, proxySecret: string, username: string, apiKey: string,
+): Promise<string | { status: number; body: Record<string, unknown> }> {
   const now = Date.now();
   if (TOKEN_MEM.token && (TOKEN_MEM.expiresAt ?? 0) > now + 60_000) return TOKEN_MEM.token;
   const basic = btoa(`${username}:${apiKey}`);
-  const { ok, body } = await proxyFetch(proxyUrl, proxySecret, '/v1/token', { Authorization: `Basic ${basic}` }, {});
-  if (!ok || !body?.token) return null;
+  const { ok, status, body } = await proxyFetch(proxyUrl, proxySecret, '/v1/token', { Authorization: `Basic ${basic}` }, {});
+  if (!ok || !body?.token) return { status, body };
   TOKEN_MEM.token = body.token;
   TOKEN_MEM.expiresAt = now + 23 * 60 * 60 * 1000;
   return body.token;

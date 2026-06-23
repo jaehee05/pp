@@ -58,11 +58,13 @@ export function MemberPanel({ onClose }: { onClose?: () => void } = {}) {
             {filtered.length === 0 && <li className="p-6 text-center text-sm text-slate-400">회원 없음</li>}
             {filtered.map((s) => {
               const a = att[s.id];
-              const stateLabel =
-                a?.state === 'in' ? { txt: '이용중', cls: 'bg-emerald-100 text-emerald-700' }
-                : a?.state === 'temp_out' ? { txt: '외출', cls: 'bg-amber-100 text-amber-700' }
-                : { txt: '이용안함', cls: 'bg-slate-100 text-slate-500' };
               const sub = subs.filter((x) => x.studentId === s.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0];
+              // 이용중/이용안함은 활성 이용권 기준. 입실/외출은 별도 라벨로 우선 표시.
+              const stateLabel = !sub
+                ? { txt: '이용안함', cls: 'bg-slate-100 text-slate-500' }
+                : a?.state === 'in' ? { txt: '입실', cls: 'bg-emerald-100 text-emerald-700' }
+                : a?.state === 'temp_out' ? { txt: '외출', cls: 'bg-amber-100 text-amber-700' }
+                : { txt: '이용중', cls: 'bg-brand-100 text-brand-700' };
               return (
                 <li key={s.id}>
                   <NavLink

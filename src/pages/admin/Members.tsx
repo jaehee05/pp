@@ -146,10 +146,14 @@ export function MembersAdmin() {
                 const a = att[s.id];
                 const sub = subs.filter((x) => x.studentId === s.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0];
                 const sumPaid = pays.filter((p) => p.studentId === s.id && p.status === 'approved').reduce((acc, p) => acc + p.amount, 0);
-                const useStateLabel =
-                  a?.state === 'in' ? <span className="text-brand-700 font-semibold">이용중</span>
-                  : a?.state === 'temp_out' ? <span className="text-amber-600">외출</span>
-                  : sub ? <span className="text-brand-700">이용중</span>
+                // 이용상태: 활성 이용권 보유 여부로만 판단 (입실/외출은 별도 컬럼이 필요하면 추가).
+                // 활성 이용권 있고 현재 입실 → 진한 색, 단순 보유 → 옅은 색, 없음 → 이용안함
+                const useStateLabel = sub
+                  ? (a?.state === 'in'
+                      ? <span className="text-brand-700 font-semibold">이용중 · 입실</span>
+                      : a?.state === 'temp_out'
+                        ? <span className="text-brand-700">이용중 · <span className="text-amber-600">외출</span></span>
+                        : <span className="text-brand-700">이용중</span>)
                   : <span className="text-rose-500">이용안함</span>;
                 const endAt = sub?.endAt;
                 const daysLeft = endAt ? Math.max(0, Math.round((endAt - Date.now()) / 86400000)) : null;

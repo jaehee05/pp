@@ -130,15 +130,16 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     return () => { active = false; };
   }, []);
 
-  // 변경 시 Firestore + localStorage에 저장(편집 모드에서만, 원격 로드 후).
+  // 변경 시 Firestore + localStorage에 저장 (원격 로드 후).
+  // 운영(editable=false) 모드에서도 좌석 배정/메모/상태 변경은 저장돼야 하므로
+  // editable 가드 제거. dimensions는 view 모드 UI에서 변경 불가하므로 안전.
   useEffect(() => {
-    if (!hydrated || !editable) return;
-    // 가드: 빈 배치도는 원격에 저장하지 않음(다른 origin의 좌석 덮어쓰기 방지).
-    // 로컬 캐시에는 항상 기록해 같은 브라우저에서는 빈 상태도 유지.
+    if (!hydrated) return;
     const json = JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN });
     try { localStorage.setItem(STORE_KEY, json); } catch { /* */ }
+    // 빈 배치도는 원격에 저장하지 않음(다른 origin의 좌석 덮어쓰기 방지)
     if (seats.length > 0) void firestoreStorage.setItem(STORE_KEY, json);
-  }, [hydrated, editable, width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
+  }, [hydrated, width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
 
   const selected = useMemo(() => seats.find((s) => s.id === selectedId) ?? null, [seats, selectedId]);
   const seatCount = useMemo(() => seats.filter((s) => s.type === 'seat').length, [seats]);

@@ -13,6 +13,11 @@ export function PpurioSettingsPage() {
     proxyUrl: cfg.proxyUrl,
     proxySecret: cfg.proxySecret,
     enabled: cfg.enabled,
+    channel: cfg.channel,
+    templateEnter: cfg.templateEnter,
+    templateExit: cfg.templateExit,
+    templateNoShow: cfg.templateNoShow,
+    notice: cfg.notice,
   });
   const [saved, setSaved] = useState(false);
   const [testPhone, setTestPhone] = useState('');
@@ -97,6 +102,60 @@ export function PpurioSettingsPage() {
               onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })} />
             발송 활성화 (false면 모든 알림 발송 스킵)
           </label>
+        </div>
+
+        <div className="card p-6">
+          <h3 className="mb-4 font-semibold">자동 알림 채널 + 템플릿</h3>
+          <p className="mb-3 text-xs text-slate-500">
+            입실/퇴실/미입실 자동 알림을 SMS로 보낼지, 카카오 알림톡으로 보낼지 선택.
+            알림톡은 PPURIO에 사전 등록한 템플릿 코드 필요.
+          </p>
+          <div className="mb-4 inline-flex overflow-hidden rounded-md ring-1 ring-slate-300">
+            {(['sms', 'kakao'] as const).map((c) => (
+              <button key={c} type="button" onClick={() => setDraft({ ...draft, channel: c })}
+                className={`px-5 py-2 text-sm font-medium ${draft.channel === c ? 'bg-brand-600 text-white' : 'bg-white text-slate-600'}`}>
+                {c === 'sms' ? '📱 SMS/LMS' : '💬 카카오 알림톡'}
+              </button>
+            ))}
+          </div>
+
+          {draft.channel === 'kakao' && (
+            <div className="space-y-3 rounded-md bg-slate-50 p-4 text-sm">
+              <p className="text-xs text-slate-500">
+                템플릿 본문에 [*이름*] [*1*] [*2*] 변수가 있어야 자동 치환됨.
+                <br />[*이름*] = 학생 이름, [*1*] = 시간(입실/퇴실/예정), [*2*] = 공통 공지(아래 입력)
+              </p>
+              <Field label="입실 안내 templateCode">
+                <input className="input font-mono" value={draft.templateEnter}
+                  onChange={(e) => setDraft({ ...draft, templateEnter: e.target.value })}
+                  placeholder="PPURIO 콘솔의 템플릿 코드" />
+              </Field>
+              <Field label="퇴실 안내 templateCode">
+                <input className="input font-mono" value={draft.templateExit}
+                  onChange={(e) => setDraft({ ...draft, templateExit: e.target.value })}
+                  placeholder="PPURIO 콘솔의 템플릿 코드" />
+              </Field>
+              <Field label="미입실 안내 templateCode">
+                <input className="input font-mono" value={draft.templateNoShow}
+                  onChange={(e) => setDraft({ ...draft, templateNoShow: e.target.value })}
+                  placeholder="PPURIO 콘솔의 템플릿 코드" />
+              </Field>
+            </div>
+          )}
+          {draft.channel === 'sms' && (
+            <p className="rounded-md bg-amber-50 p-3 text-xs text-amber-700">
+              SMS 모드 — 알림톡 템플릿 코드는 사용하지 않습니다. 메시지는 본문에 공통 공지가 함께 붙어 발송.
+              한글 45자(90byte) 넘으면 자동으로 LMS로 승격.
+            </p>
+          )}
+        </div>
+
+        <div className="card p-6">
+          <h3 className="mb-3 font-semibold">공통 공지 ([*2*] 치환값)</h3>
+          <p className="mb-2 text-xs text-slate-500">알림톡/SMS 본문에 자동으로 붙는 안내 문구.</p>
+          <textarea className="input font-mono" rows={5} value={draft.notice}
+            onChange={(e) => setDraft({ ...draft, notice: e.target.value })}
+            placeholder="예: 문의: 010-XXXX-XXXX&#10;합격공간 분당정자점" />
         </div>
 
         <div className="flex items-center justify-end gap-3">

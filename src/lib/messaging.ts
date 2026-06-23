@@ -1,7 +1,7 @@
 // 메시지 발송 라이브러리.
 // /api/notify/send (Vercel Edge Function) 호출. 실패 시 localStorage 로그에만 기록.
 
-export type Channel = 'sms' | 'lms';
+export type Channel = 'sms' | 'lms' | 'kakao';
 
 export interface MessageRecord {
   id: string;
@@ -34,13 +34,16 @@ export const messaging = {
   },
 
   async send({
-    to, channel, message, template, subject,
+    to, channel, message, template, subject, templateCode, changeWord, messageType,
   }: {
     to: string;
     channel: Channel;
     message: string;
-    template: string;          // 내부 템플릿 이름 (enter / exit / no_show / custom 등)
-    subject?: string;          // LMS 제목 (선택)
+    template: string;            // 내부 트리거 이름 (enter / exit / no_show / custom)
+    subject?: string;            // LMS 제목
+    templateCode?: string;       // 알림톡 템플릿 코드 (channel=kakao 시 필수)
+    changeWord?: Record<string, string>; // 알림톡 변수 치환
+    messageType?: 'ALT' | 'ALH' | 'ALI'; // 알림톡 유형 (기본 ALH 강조형)
   }): Promise<MessageRecord> {
     const id = `msg_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
     let rec: MessageRecord = { id, to, channel, template, message, status: 'queued', ts: Date.now() };
@@ -56,7 +59,7 @@ export const messaging = {
       const res = await fetch('/api/notify/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, channel, message, subject }),
+        body: JSON.stringify({ to, channel, message, subject, templateCode, changeWord, messageType }),
       });
       const data = await res.json();
       if (!res.ok || !data.ok) {
@@ -67,7 +70,6 @@ export const messaging = {
         rec = { ...rec, status: 'sent', remoteId: data.id };
       }
     } catch (e) {
-      // API 호출 실패 (dev 환경 등): 로컬 로그만
       rec = { ...rec, status: 'mock', error: e instanceof Error ? e.message : String(e) };
     }
     saveLog([rec, ...loadLog()]);

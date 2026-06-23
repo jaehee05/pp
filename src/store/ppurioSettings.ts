@@ -14,6 +14,15 @@ export interface PpurioSettings {
   proxyUrl: string;        // VM 프록시 URL
   proxySecret: string;
   enabled: boolean;
+
+  // 채널: 'sms' | 'kakao' (입퇴실/미입실 자동 알림 발송 채널)
+  channel: 'sms' | 'kakao';
+  // PPURIO에 사전 등록한 알림톡 템플릿 코드 (channel=kakao 일 때 사용)
+  templateEnter: string;
+  templateExit: string;
+  templateNoShow: string;
+  // 공통 공지 ([*2*] 변수에 치환)
+  notice: string;
 }
 
 interface State extends PpurioSettings {
@@ -30,6 +39,11 @@ export const usePpurio = create<State>()(
       proxyUrl: '',
       proxySecret: '',
       enabled: true,
+      channel: 'sms',
+      templateEnter: '',
+      templateExit: '',
+      templateNoShow: '',
+      notice: '',
       set: (patch) => set(patch),
     }),
     {

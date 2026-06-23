@@ -1,13 +1,13 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { Layout } from './components/Layout';
-import { Dashboard } from './pages/Dashboard';
-import { SeatsPage } from './pages/Seats';
-import { StudentsPage } from './pages/Students';
-import { StudentDetailPage } from './pages/StudentDetail';
-import { PaymentsPage } from './pages/Payments';
-import { AttendancePage } from './pages/Attendance';
-import { PointsPage } from './pages/Points';
-import { SchedulePage } from './pages/Schedule';
+import { AdminLayout } from './components/AdminLayout';
+import { OpsLayout } from './components/OpsLayout';
+import { Dashboard } from './pages/admin/Dashboard';
+import { MembersAdmin } from './pages/admin/Members';
+import { SimpleStub } from './pages/admin/Stub';
+import { OpsLayoutPage } from './pages/ops/LayoutPage';
+import { OpsRegister } from './pages/ops/Register';
+import { OpsMember } from './pages/ops/Member';
+import { OpsStub } from './pages/ops/Stub';
 import { KioskPage } from './pages/Kiosk';
 
 export default function App() {
@@ -15,16 +15,37 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/kiosk" element={<KioskPage />} />
-        <Route element={<Layout />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/seats" element={<SeatsPage />} />
-          <Route path="/students" element={<StudentsPage />} />
-          <Route path="/students/:id" element={<StudentDetailPage />} />
-          <Route path="/payments" element={<PaymentsPage />} />
-          <Route path="/attendance" element={<AttendancePage />} />
-          <Route path="/points" element={<PointsPage />} />
-          <Route path="/schedule" element={<SchedulePage />} />
+        <Route index element={<Navigate to="/ops/layout" replace />} />
+
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/admin/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="members" element={<MembersAdmin />} />
+          <Route path="sales/daily" element={<SimpleStub title="일별 매출" />} />
+          <Route path="sales/payments" element={<SimpleStub title="결제 내역" />} />
+          <Route path="sales/refunds" element={<SimpleStub title="환불 내역" />} />
+          <Route path="store/info" element={<SimpleStub title="매장 정보" />} />
+          <Route path="store/managers" element={<SimpleStub title="매니저 관리" />} />
+          <Route path="store/hours" element={<SimpleStub title="운영 시간" />} />
+          <Route path="seat-plans" element={<SimpleStub title="좌석 이용권 관리" />} />
+          <Route path="room-plans" element={<SimpleStub title="룸/사물함 이용권 관리" />} />
+          <Route path="messages/templates" element={<SimpleStub title="메시지 템플릿" />} />
+          <Route path="messages/history" element={<SimpleStub title="발송 이력" />} />
+          <Route path="messages/balance" element={<SimpleStub title="잔여 캐시/포인트" />} />
+          <Route path="layouts/seats" element={<Navigate to="/ops/layout" replace />} />
+          <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
+        </Route>
+
+        <Route path="/ops" element={<OpsLayout />}>
+          <Route index element={<Navigate to="/ops/layout" replace />} />
+          <Route path="layout" element={<OpsLayoutPage />} />
+          <Route path="rooms" element={<OpsStub title="룸 운영" />} />
+          <Route path="lockers" element={<OpsStub title="사물함 운영" />} />
+          <Route path="shoes" element={<OpsStub title="신발장 운영" />} />
+          <Route path="notices" element={<OpsStub title="전달사항" />} />
+          <Route path="reservations" element={<OpsStub title="예약문의" />} />
+          <Route path="register" element={<OpsRegister />} />
+          <Route path="member/:id" element={<OpsMember />} />
         </Route>
       </Routes>
     </BrowserRouter>

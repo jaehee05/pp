@@ -2,11 +2,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Student, WeekdayKey } from '../lib/types';
 
-// 임시 로컬 스토어. 추후 Firestore로 교체.
 type LocalStudent = Omit<Student, 'joinedAt' | 'pointsTotal'> & {
-  joinedAt: number;       // epoch ms
+  joinedAt: number;
   pointsTotal: number;
-};
+  pin?: string;                 // 키오스크/지문 보조용 PIN (4자리)
+  birthYmd?: string;            // YYYY-MM-DD
+  memberKind?: 'student' | 'adult';  // 구분
+  memberState?: 'normal' | 'restricted' | 'risk' | 'left'; // 정상/제한/불량/탈퇴
+  msgReceive?: boolean;         // 본인 메시지 수신 (true=수신, false=거부)
+  parentMsgReceive?: boolean;   // 학부모 메시지 수신
+  lockerId?: string;
+  shoeId?: string;
+}
 
 interface State {
   list: LocalStudent[];
@@ -49,6 +56,12 @@ export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTo
     school: '',
     grade: '',
     memo: '',
+    pin: '',
+    birthYmd: '',
+    memberKind: 'student',
+    memberState: 'normal',
+    msgReceive: true,
+    parentMsgReceive: true,
     notify: {
       studentEnterExit: true,
       parentEnterExit: true,

@@ -4,6 +4,10 @@ import { OpsLayout } from './components/OpsLayout';
 import { Dashboard } from './pages/admin/Dashboard';
 import { MembersAdmin } from './pages/admin/Members';
 import { SimpleStub } from './pages/admin/Stub';
+import { PlansPage } from './pages/admin/Plans';
+import { MessagesTemplates } from './pages/admin/MessagesTemplates';
+import { MessagesHistory } from './pages/admin/MessagesHistory';
+import { MessagesBalance } from './pages/admin/MessagesBalance';
 import { SeatsPage } from './pages/Seats';
 import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
@@ -27,11 +31,11 @@ export default function App() {
           <Route path="store/info" element={<SimpleStub title="매장 정보" />} />
           <Route path="store/managers" element={<SimpleStub title="매니저 관리" />} />
           <Route path="store/hours" element={<SimpleStub title="운영 시간" />} />
-          <Route path="seat-plans" element={<SimpleStub title="좌석 이용권 관리" />} />
-          <Route path="room-plans" element={<SimpleStub title="룸/사물함 이용권 관리" />} />
-          <Route path="messages/templates" element={<SimpleStub title="메시지 템플릿" />} />
-          <Route path="messages/history" element={<SimpleStub title="발송 이력" />} />
-          <Route path="messages/balance" element={<SimpleStub title="잔여 캐시/포인트" />} />
+          <Route path="seat-plans" element={<PlansPage category="seat" />} />
+          <Route path="room-plans" element={<PlansPage category="room" />} />
+          <Route path="messages/templates" element={<MessagesTemplates />} />
+          <Route path="messages/history" element={<MessagesHistory />} />
+          <Route path="messages/balance" element={<MessagesBalance />} />
           <Route path="layouts/seats" element={<SeatsPage />} />
           <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
         </Route>

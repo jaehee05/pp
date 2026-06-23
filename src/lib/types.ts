@@ -40,7 +40,7 @@ export interface Student {
 }
 
 // ---------- 좌석 ----------
-// 모든 좌표/크기는 px 단위 (PICKKO 스타일).
+// 모든 좌표/크기는 px 단위.
 export interface Seat {
   id: ID;        // 좌석 내부 id
   label: string; // 표시명 (좌석 번호, 예: "11")
@@ -53,6 +53,9 @@ export interface Seat {
   type: 'seat' | 'room' | 'wall' | 'door' | 'desk' | 'label'; // 도형 종류
   rotation?: 0 | 90 | 180 | 270;
   assignedStudentId?: ID | null; // 현재 배정된 학생 (장기 배정)
+  active?: boolean;              // false = 비활성(고장/공사 등). 기본 true
+  memo?: string;                 // 좌석 메모
+  assignmentHistory?: { studentId: ID; assignedAt: number; releasedAt?: number }[];
 }
 
 export interface SeatLayout {
@@ -69,12 +72,16 @@ export interface SeatLayout {
 export interface Plan {
   id: ID;
   name: string;        // 예: "정기권 1개월", "4시간권"
+  category: 'seat' | 'room';    // 좌석권 / 룸·사물함권
+  seatType?: 'fixed' | 'free';  // 좌석권일 때만: 고정석/자유석
   type: 'period' | 'hours' | 'count'; // 기간제 / 시간제 / 회차제
   durationDays?: number;
   hours?: number;
   counts?: number;
   price: number;
   active: boolean;
+  hidden?: boolean;             // 숨김(노출 안 함)
+  description?: string;
 }
 
 export interface Subscription {

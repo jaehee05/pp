@@ -1,66 +1,46 @@
 import type { LocalStudent } from '../store/students';
+import { messaging } from './messaging';
 
-// 알림 발송 어댑터 — 실제로는 Firebase Function이 솔라피/카카오 알림톡 API 호출.
-// 프론트는 큐에 enqueue만 하고, 함수에서 처리하는 패턴. 지금은 콘솔 로깅 + 발송 로그 저장.
-
-interface Job {
-  id: string;
-  to: string;
-  channel: 'kakao' | 'sms';
-  template: string;
-  message: string;
-  ts: number;
-}
-
-const KEY = 'pp.notify.log.v1';
-
-function push(job: Job) {
-  const raw = localStorage.getItem(KEY);
-  const list: Job[] = raw ? JSON.parse(raw) : [];
-  list.unshift(job);
-  localStorage.setItem(KEY, JSON.stringify(list.slice(0, 200)));
-  // 콘솔로도 출력 (개발 가시성)
-  // eslint-disable-next-line no-console
-  console.log('[notify]', job);
-}
-
-function send(to: string, message: string, template: string) {
-  if (!to) return;
-  push({
-    id: `n_${Date.now().toString(36)}`,
-    to,
-    channel: 'kakao',
-    template,
-    message,
-    ts: Date.now(),
-  });
-}
+// 입퇴실/미입실 등 운영 이벤트를 학생/학부모에게 발송.
+// 실제 발송은 messaging.send → /api/notify/send 경유.
 
 export const notify = {
   enter(s: LocalStudent) {
-    if (s.notify.studentEnterExit && s.phone) {
-      send(s.phone, `[합격공간] ${s.name}님 입실했습니다.`, 'enter_student');
+    if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
+      void messaging.send({
+        to: s.phone, channel: 'kakao', template: 'enter_student',
+        message: `[합격공간] ${s.name}님 입실했습니다.`,
+      });
     }
-    if (s.notify.parentEnterExit && s.parentPhone) {
-      send(s.parentPhone, `[합격공간] ${s.name} 학생이 입실했습니다.`, 'enter_parent');
+    if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
+      void messaging.send({
+        to: s.parentPhone, channel: 'kakao', template: 'enter_parent',
+        message: `[합격공간] ${s.name} 학생이 입실했습니다.`,
+      });
     }
   },
   exit(s: LocalStudent) {
-    if (s.notify.studentEnterExit && s.phone) {
-      send(s.phone, `[합격공간] ${s.name}님 퇴실했습니다.`, 'exit_student');
+    if (s.notify.studentEnterExit && s.msgReceive !== false && s.phone) {
+      void messaging.send({
+        to: s.phone, channel: 'kakao', template: 'exit_student',
+        message: `[합격공간] ${s.name}님 퇴실했습니다.`,
+      });
     }
-    if (s.notify.parentEnterExit && s.parentPhone) {
-      send(s.parentPhone, `[합격공간] ${s.name} 학생이 퇴실했습니다.`, 'exit_parent');
+    if (s.notify.parentEnterExit && s.parentMsgReceive !== false && s.parentPhone) {
+      void messaging.send({
+        to: s.parentPhone, channel: 'kakao', template: 'exit_parent',
+        message: `[합격공간] ${s.name} 학생이 퇴실했습니다.`,
+      });
     }
   },
   noShow(s: LocalStudent, scheduledStart: string) {
-    if (s.notify.parentLateMiss && s.parentPhone) {
-      send(s.parentPhone, `[합격공간] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.`, 'no_show');
+    if (s.notify.parentLateMiss && s.parentMsgReceive !== false && s.parentPhone) {
+      void messaging.send({
+        to: s.parentPhone, channel: 'kakao', template: 'no_show',
+        message: `[합격공간] ${s.name} 학생이 ${scheduledStart} 입실 예정이었으나 아직 미입실입니다.`,
+      });
     }
   },
-  recent(limit = 50): Job[] {
-    const raw = localStorage.getItem(KEY);
-    const list: Job[] = raw ? JSON.parse(raw) : [];
-    return list.slice(0, limit);
-  },
+  // 기존 코드 호환용 — 메시지 페이지에서 사용
+  recent: messaging.recent,
 };

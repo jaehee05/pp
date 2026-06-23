@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
+import { Modal } from '../components/Modal';
+import { SeatContextMenu } from '../components/SeatContextMenu';
+import { AssignStudentModal } from '../components/AssignStudentModal';
 import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
 import { ddayLabel, ddayOf, expiryShort } from '../lib/sub';
+import { fmtDateTime } from '../lib/format';
 
 type EditorMode = 'view' | 'edit';
 
@@ -84,6 +89,16 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const students = useStudents((s) => s.list);
   const attState = useAttendance((s) => s.state);
   const subs = usePlans((s) => s.subs);
+  const addSubscription = usePlans((s) => s.addSubscription);
+  const plans = usePlans((s) => s.plans);
+  const nav = useNavigate();
+
+  const [ctxMenu, setCtxMenu] = useState<{ seatId: string; x: number; y: number } | null>(null);
+  const [assignSeatId, setAssignSeatId] = useState<string | null>(null);
+  const [memoSeatId, setMemoSeatId] = useState<string | null>(null);
+  const [memoDraft, setMemoDraft] = useState('');
+  const [historySeatId, setHistorySeatId] = useState<string | null>(null);
+  const [typeSeatId, setTypeSeatId] = useState<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN }));
@@ -127,9 +142,94 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   function onSeatMouseDown(e: React.MouseEvent, s: Seat) {
     e.stopPropagation();
     setSelectedId(s.id);
+    // 우클릭(2번 버튼) → 컨텍스트 메뉴
+    if (e.button === 2) {
+      e.preventDefault();
+      setCtxMenu({ seatId: s.id, x: e.clientX, y: e.clientY });
+      return;
+    }
+    // 운영 view 모드에서 좌클릭 = 컨텍스트 메뉴 (좌석 종류만)
+    if (!editable && s.type === 'seat') {
+      setCtxMenu({ seatId: s.id, x: e.clientX, y: e.clientY });
+      return;
+    }
     if (!editable || mode !== 'edit') return;
     const { x, y } = pxFromEvent(e);
     dragRef.current = { id: s.id, offX: x - s.x, offY: y - s.y };
+  }
+
+  function handleContextAction(action: 'memberInfo' | 'assign' | 'release' | 'memo' | 'toggleActive' | 'changeType' | 'history') {
+    if (!ctxMenu) return;
+    const seat = seats.find((s) => s.id === ctxMenu.seatId);
+    if (!seat) return;
+    if (action === 'memberInfo' && seat.assignedStudentId) {
+      nav(`/ops/member/${seat.assignedStudentId}`);
+    } else if (action === 'assign') {
+      setAssignSeatId(seat.id);
+    } else if (action === 'release') {
+      if (confirm(`${seat.label} 좌석의 배정을 해제할까요?`)) {
+        const history = seat.assignmentHistory ?? [];
+        const last = history[history.length - 1];
+        if (last && !last.releasedAt && last.studentId === seat.assignedStudentId) {
+          last.releasedAt = Date.now();
+        }
+        setSeats((prev) => prev.map((s) =>
+          s.id === seat.id ? { ...s, assignedStudentId: null, assignmentHistory: [...history] } : s,
+        ));
+      }
+    } else if (action === 'memo') {
+      setMemoDraft(seat.memo ?? '');
+      setMemoSeatId(seat.id);
+    } else if (action === 'toggleActive') {
+      setSeats((prev) => prev.map((s) =>
+        s.id === seat.id ? { ...s, active: s.active === false ? true : false } : s,
+      ));
+    } else if (action === 'changeType') {
+      setTypeSeatId(seat.id);
+    } else if (action === 'history') {
+      setHistorySeatId(seat.id);
+    }
+  }
+
+  function confirmAssign(data: { studentId: string; planId: string; startAt: number; durationDays?: number }) {
+    const seat = seats.find((s) => s.id === assignSeatId);
+    const plan = plans.find((p) => p.id === data.planId);
+    if (!seat || !plan) return;
+    const endAt = data.durationDays ? data.startAt + data.durationDays * 86400000 : undefined;
+    addSubscription({
+      studentId: data.studentId,
+      planId: plan.id,
+      planSnapshot: {
+        name: plan.name, type: plan.type,
+        durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+        price: plan.price,
+      },
+      startAt: data.startAt,
+      endAt,
+      hoursRemaining: plan.hours,
+      countsRemaining: plan.counts,
+      status: 'active',
+    });
+    const history = seat.assignmentHistory ?? [];
+    setSeats((prev) => prev.map((s) =>
+      s.id === seat.id
+        ? { ...s, assignedStudentId: data.studentId,
+            assignmentHistory: [...history, { studentId: data.studentId, assignedAt: Date.now() }] }
+        : s,
+    ));
+    setAssignSeatId(null);
+  }
+
+  function saveMemo() {
+    if (!memoSeatId) return;
+    setSeats((prev) => prev.map((s) => (s.id === memoSeatId ? { ...s, memo: memoDraft } : s)));
+    setMemoSeatId(null);
+  }
+
+  function changeSeatTag(newTag: string) {
+    if (!typeSeatId) return;
+    setSeats((prev) => prev.map((s) => (s.id === typeSeatId ? { ...s, tag: newTag } : s)));
+    setTypeSeatId(null);
   }
 
   function onResizeMouseDown(e: React.MouseEvent, s: Seat) {
@@ -283,6 +383,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
+            onContextMenu={(e) => e.preventDefault()}
             className="relative border border-slate-300 bg-white"
             style={{
               width, height,
@@ -404,6 +505,91 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
           </aside>
         )}
       </div>
+
+      {ctxMenu && (() => {
+        const seat = seats.find((s) => s.id === ctxMenu.seatId);
+        if (!seat) return null;
+        const stu = seat.assignedStudentId ? students.find((x) => x.id === seat.assignedStudentId) : undefined;
+        return (
+          <SeatContextMenu
+            seat={seat}
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            assignedName={stu?.name}
+            onClose={() => setCtxMenu(null)}
+            onAction={handleContextAction}
+          />
+        );
+      })()}
+
+      <AssignStudentModal
+        open={!!assignSeatId}
+        onClose={() => setAssignSeatId(null)}
+        seatId={assignSeatId}
+        seatLabel={seats.find((s) => s.id === assignSeatId)?.label}
+        onConfirm={confirmAssign}
+      />
+
+      <Modal
+        open={!!memoSeatId}
+        onClose={() => setMemoSeatId(null)}
+        title={`좌석 메모 — ${seats.find((s) => s.id === memoSeatId)?.label ?? ''}`}
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setMemoSeatId(null)}>취소</button>
+            <button className="btn-primary" onClick={saveMemo}>저장</button>
+          </>
+        }
+      >
+        <textarea className="input min-h-[120px]" value={memoDraft} onChange={(e) => setMemoDraft(e.target.value)}
+          placeholder="고장 신고, 특이사항 등" />
+      </Modal>
+
+      <Modal
+        open={!!historySeatId}
+        onClose={() => setHistorySeatId(null)}
+        title={`좌석 히스토리 — ${seats.find((s) => s.id === historySeatId)?.label ?? ''}`}
+        width="max-w-lg"
+      >
+        {(() => {
+          const seat = seats.find((s) => s.id === historySeatId);
+          const hist = seat?.assignmentHistory ?? [];
+          if (hist.length === 0) return <p className="py-6 text-center text-sm text-slate-400">배정 이력 없음</p>;
+          return (
+            <ol className="space-y-1 text-sm">
+              {[...hist].reverse().map((h, i) => {
+                const stu = students.find((s) => s.id === h.studentId);
+                return (
+                  <li key={i} className="flex items-center justify-between border-b border-slate-100 py-2">
+                    <span className="font-medium">{stu?.name ?? '(삭제된 회원)'}</span>
+                    <span className="text-xs text-slate-500">
+                      {fmtDateTime(new Date(h.assignedAt))}
+                      {h.releasedAt && ` → ${fmtDateTime(new Date(h.releasedAt))}`}
+                      {!h.releasedAt && <span className="ml-1 text-emerald-600">(이용중)</span>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          );
+        })()}
+      </Modal>
+
+      <Modal
+        open={!!typeSeatId}
+        onClose={() => setTypeSeatId(null)}
+        title="좌석 타입 변경"
+        width="max-w-sm"
+      >
+        <div className="space-y-2">
+          {['고정석', '자유석', '관리자석', '지정석'].map((t) => (
+            <button key={t} onClick={() => changeSeatTag(t)}
+              className="w-full rounded-md border border-slate-200 px-4 py-3 text-left text-sm hover:bg-slate-50">
+              {t}
+            </button>
+          ))}
+        </div>
+      </Modal>
     </>
   );
 }

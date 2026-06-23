@@ -8,6 +8,7 @@ import { PlansPage } from './pages/admin/Plans';
 import { MessagesTemplates } from './pages/admin/MessagesTemplates';
 import { MessagesHistory } from './pages/admin/MessagesHistory';
 import { MessagesBalance } from './pages/admin/MessagesBalance';
+import { PpurioSettingsPage } from './pages/admin/PpurioSettings';
 import { SeatsPage } from './pages/Seats';
 import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="messages/templates" element={<MessagesTemplates />} />
           <Route path="messages/history" element={<MessagesHistory />} />
           <Route path="messages/balance" element={<MessagesBalance />} />
+          <Route path="messages/ppurio" element={<PpurioSettingsPage />} />
           <Route path="layouts/seats" element={<SeatsPage />} />
           <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
         </Route>

@@ -32,6 +32,7 @@ const NAV: NavItem[] = [
   {
     label: '메시지 발송 관리', icon: '💬', children: [
       { to: '/admin/messages/templates', label: '템플릿' },
+      { to: '/admin/messages/ppurio', label: '뿌리오 설정' },
       { to: '/admin/messages/history', label: '발송 이력' },
       { to: '/admin/messages/balance', label: '잔여 캐시/포인트' },
     ],

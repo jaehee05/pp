@@ -288,10 +288,11 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
               width, height,
               marginLeft: offsetX, marginTop: offsetY,
               zIndex: offsetZ,
-              backgroundImage:
-                `linear-gradient(to right, #f1f5f9 1px, transparent 1px),
-                 linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)`,
-              backgroundSize: `${snap * 4}px ${snap * 4}px`,
+              backgroundImage: editable
+                ? `linear-gradient(to right, #f1f5f9 1px, transparent 1px),
+                   linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)`
+                : undefined,
+              backgroundSize: editable ? `${snap * 4}px ${snap * 4}px` : undefined,
               cursor: paletteDrag ? 'crosshair' : 'default',
             }}
           >

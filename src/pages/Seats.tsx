@@ -10,6 +10,7 @@ import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
 import { ddayLabel, ddayOf, expiryShort } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
+import { firestoreStorage } from '../lib/firestoreStorage';
 
 type EditorMode = 'view' | 'edit';
 
@@ -100,9 +101,36 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const [historySeatId, setHistorySeatId] = useState<string | null>(null);
   const [typeSeatId, setTypeSeatId] = useState<string | null>(null);
 
+  const [hydrated, setHydrated] = useState(false);
+
+  // 마운트 시 Firestore(원격)에서 배치도를 받아 반영. 다른 기기/도메인에서 저장한
+  // 좌석도 여기로 동기화된다. 원격 로드 전엔 저장을 막아 빈 데이터로 덮어쓰지 않는다.
   useEffect(() => {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN }));
-  }, [width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
+    let active = true;
+    void Promise.resolve(firestoreStorage.getItem(STORE_KEY)).then((raw) => {
+      if (active && raw) {
+        try {
+          const v = JSON.parse(raw) as Partial<SavedLayout>;
+          if (v.width != null) setWidth(v.width);
+          if (v.height != null) setHeight(v.height);
+          if (v.snap != null) setSnap(v.snap);
+          if (v.offsetX != null) setOffsetX(v.offsetX);
+          if (v.offsetY != null) setOffsetY(v.offsetY);
+          if (v.offsetZ != null) setOffsetZ(v.offsetZ);
+          if (v.seats) setSeats(v.seats);
+          if (v.autoLabelN != null) setAutoLabelN(v.autoLabelN);
+        } catch { /* */ }
+      }
+      if (active) setHydrated(true);
+    });
+    return () => { active = false; };
+  }, []);
+
+  // 변경 시 Firestore + localStorage에 저장(편집 모드에서만, 원격 로드 후).
+  useEffect(() => {
+    if (!hydrated || !editable) return;
+    void firestoreStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN }));
+  }, [hydrated, editable, width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
 
   const selected = useMemo(() => seats.find((s) => s.id === selectedId) ?? null, [seats, selectedId]);
   const seatCount = useMemo(() => seats.filter((s) => s.type === 'seat').length, [seats]);
@@ -304,13 +332,13 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
       seats: JSON.parse(JSON.stringify(seats)),
       autoLabelN,
     };
-    localStorage.setItem(DEFAULT_KEY, JSON.stringify(snapshot));
+    void firestoreStorage.setItem(DEFAULT_KEY, JSON.stringify(snapshot));
     alert(`현재 배치를 기본값으로 저장했습니다.\n좌석 ${seats.filter(s => s.type === 'seat').length}개 / 캔버스 ${width}×${height}\n이후 "기본값으로 복원" 시 이 상태로 되돌아갑니다.`);
   }
 
   function clearDefault() {
     if (!confirm('저장된 기본 배치도를 삭제할까요? 이후 "초기화"는 빈 캔버스가 됩니다.')) return;
-    localStorage.removeItem(DEFAULT_KEY);
+    void firestoreStorage.removeItem(DEFAULT_KEY);
     alert('기본 배치도 삭제 완료.');
   }
 

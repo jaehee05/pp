@@ -12,6 +12,20 @@ import { db, firebaseEnabled } from './firebase';
 
 const COLLECTION = 'appState';
 
+// Firestore가 셋업 전이거나 네트워크가 막히면 getDoc이 응답/에러 없이
+// 멈출 수 있다. 그 경우 하이드레이션이 끝나지 않아 앱이 무한 로딩된다.
+// → 읽기에 타임아웃을 걸어, 일정 시간 내 응답이 없으면 localStorage로 폴백한다.
+const READ_TIMEOUT_MS = 3500;
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (v: T) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } };
+    const timer = setTimeout(() => finish(fallback), ms);
+    p.then(finish, () => finish(fallback));
+  });
+}
+
 function localGet(name: string): string | null {
   try { return localStorage.getItem(name); } catch { return null; }
 }
@@ -25,18 +39,23 @@ function localRemove(name: string) {
 export const firestoreStorage: StateStorage = {
   async getItem(name) {
     if (firebaseEnabled && db) {
-      try {
-        const snap = await getDoc(doc(db, COLLECTION, name));
-        if (snap.exists()) {
-          const json = (snap.data() as { json?: string }).json ?? null;
-          if (json != null) localSet(name, json); // 로컬 캐시 갱신
-          return json;
+      const database = db;
+      const read = (async (): Promise<string | null> => {
+        try {
+          const snap = await getDoc(doc(database, COLLECTION, name));
+          if (snap.exists()) {
+            const json = (snap.data() as { json?: string }).json ?? null;
+            if (json != null) localSet(name, json); // 로컬 캐시 갱신
+            return json;
+          }
+          // Firestore에 문서가 없으면 로컬 캐시로 폴백(최초 마이그레이션 케이스).
+          return localGet(name);
+        } catch {
+          return localGet(name);
         }
-        // Firestore에 문서가 없으면 로컬 캐시로 폴백(최초 마이그레이션 케이스).
-        return localGet(name);
-      } catch {
-        return localGet(name);
-      }
+      })();
+      // 응답이 늦으면(셋업 전/네트워크 차단) localStorage 캐시로 즉시 진행.
+      return withTimeout(read, READ_TIMEOUT_MS, localGet(name));
     }
     return localGet(name);
   },

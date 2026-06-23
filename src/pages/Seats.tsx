@@ -26,12 +26,15 @@ const PALETTE: PaletteItem[] = [
   { type: 'door', label: '문', w: 60, h: 20, emoji: '🚪' },
 ];
 
-const STORE_KEY = 'pp.seatLayout.v2';
+const STORE_KEY = 'pp.seatLayout.v3';
 
 interface SavedLayout {
   width: number;
   height: number;
   snap: number;
+  offsetX: number;
+  offsetY: number;
+  offsetZ: number;
   seats: Seat[];
   autoLabelN: number;
 }
@@ -39,9 +42,12 @@ interface SavedLayout {
 function loadLayout(): SavedLayout {
   try {
     const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const v = JSON.parse(raw);
+      return { offsetX: 1, offsetY: 62, offsetZ: 50, ...v };
+    }
   } catch { /* */ }
-  return { width: 1600, height: 1000, snap: 5, seats: [], autoLabelN: 1 };
+  return { width: 1427, height: 1421, snap: 5, offsetX: 1, offsetY: 62, offsetZ: 50, seats: [], autoLabelN: 1 };
 }
 
 export function SeatsPage() {
@@ -50,6 +56,9 @@ export function SeatsPage() {
   const [width, setWidth] = useState(initial.width);
   const [height, setHeight] = useState(initial.height);
   const [snap, setSnap] = useState(initial.snap);
+  const [offsetX, setOffsetX] = useState(initial.offsetX);
+  const [offsetY, setOffsetY] = useState(initial.offsetY);
+  const [offsetZ, setOffsetZ] = useState(initial.offsetZ);
   const [seats, setSeats] = useState<Seat[]>(initial.seats);
   const [autoLabelN, setAutoLabelN] = useState<number>(initial.autoLabelN);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -63,10 +72,12 @@ export function SeatsPage() {
   const subs = usePlans((s) => s.subs);
 
   useEffect(() => {
-    localStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, seats, autoLabelN }));
-  }, [width, height, snap, seats, autoLabelN]);
+    localStorage.setItem(STORE_KEY, JSON.stringify({ width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN }));
+  }, [width, height, snap, offsetX, offsetY, offsetZ, seats, autoLabelN]);
 
   const selected = useMemo(() => seats.find((s) => s.id === selectedId) ?? null, [seats, selectedId]);
+  const seatCount = useMemo(() => seats.filter((s) => s.type === 'seat').length, [seats]);
+  const assignedCount = useMemo(() => seats.filter((s) => s.type === 'seat' && s.assignedStudentId).length, [seats]);
   const snapVal = (v: number) => Math.round(v / snap) * snap;
   const clampX = (x: number, w: number) => Math.max(0, Math.min(width - w, snapVal(x)));
   const clampY = (y: number, h: number) => Math.max(0, Math.min(height - h, snapVal(y)));
@@ -81,7 +92,7 @@ export function SeatsPage() {
     if (!paletteDrag) return;
     const { x, y } = pxFromEvent(e);
     const id = `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
-    const label = paletteDrag.type === 'seat' ? String(autoLabelN) : paletteDrag.label;
+    const label = paletteDrag.type === 'seat' ? String(autoLabelN).padStart(2, '0') : paletteDrag.label;
     const next: Seat = {
       id,
       label,
@@ -155,59 +166,6 @@ export function SeatsPage() {
     setSeats([]); setSelectedId(null); setAutoLabelN(1);
   }
 
-  function renderSeatDeco(s: Seat) {
-    if (s.type !== 'seat') {
-      const map = {
-        desk: 'bg-amber-100 ring-amber-300',
-        room: 'bg-sky-50 ring-sky-300',
-        wall: 'bg-slate-300 ring-slate-500',
-        door: 'bg-orange-100 ring-orange-400',
-        label: 'bg-white ring-slate-300',
-      } as const;
-      return (
-        <div
-          className={`pointer-events-none flex h-full w-full select-none items-center justify-center rounded text-xs font-semibold ring-1 ${map[s.type as keyof typeof map] ?? ''}`}
-        >
-          {s.label}
-        </div>
-      );
-    }
-    const student = s.assignedStudentId ? students.find((x) => x.id === s.assignedStudentId) : null;
-    const att = student ? attState[student.id] : undefined;
-    const headerBg =
-      att?.state === 'in' ? 'bg-emerald-300/90'
-      : att?.state === 'temp_out' ? 'bg-amber-300/90'
-      : 'bg-slate-300/90';
-    const sub = student ? subs.filter((x) => x.studentId === student.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0] : null;
-    const endAt = sub?.endAt;
-    return (
-      <div className="pointer-events-none flex h-full w-full select-none flex-col overflow-hidden rounded border border-slate-300 bg-white shadow-sm">
-        <div className={`flex items-center justify-between px-1.5 py-0.5 text-[11px] font-semibold ${headerBg}`}>
-          <span className="text-slate-900">{s.label}</span>
-          <span className="text-[10px] text-slate-700">{s.tag ?? ''}</span>
-        </div>
-        <div className="flex flex-1 flex-col justify-between px-1.5 py-1 text-[10px]">
-          {endAt ? (
-            <div className="flex items-center gap-1 text-slate-600">
-              <span>{expiryShort(endAt)}</span>
-              <span className={ddayOf(endAt) <= 7 ? 'text-red-500 font-semibold' : ''}>
-                {ddayLabel(ddayOf(endAt))}
-              </span>
-            </div>
-          ) : <div className="h-3" />}
-          {student && (
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="font-medium text-slate-800 truncate">{student.name}</span>
-              <span className={student.gender === 'M' ? 'text-sky-600' : student.gender === 'F' ? 'text-pink-500' : 'text-slate-400'}>
-                {student.gender === 'M' ? '♂' : student.gender === 'F' ? '♀' : ''}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       <PageHeader
@@ -248,28 +206,18 @@ export function SeatsPage() {
               ))}
             </div>
 
-            <div className="mt-5 space-y-2 border-t border-slate-200 pt-3 text-xs">
-              <div className="font-semibold text-slate-500">배치도 크기</div>
-              <label className="block">너비
-                <input className="input mt-1" type="number" min={400} max={5000} value={width}
-                  onChange={(e) => setWidth(Math.max(400, +e.target.value))} />
-              </label>
-              <label className="block">높이
-                <input className="input mt-1" type="number" min={400} max={5000} value={height}
-                  onChange={(e) => setHeight(Math.max(400, +e.target.value))} />
-              </label>
-              <label className="block">스냅(px)
-                <input className="input mt-1" type="number" min={1} max={50} value={snap}
-                  onChange={(e) => setSnap(Math.max(1, +e.target.value))} />
-              </label>
-            </div>
-
             {paletteDrag && (
               <div className="mt-3 rounded-md bg-brand-50 p-2 text-xs text-brand-700">
                 <b>{paletteDrag.label}</b> ({paletteDrag.w}×{paletteDrag.h}) — 배치도 클릭
                 <button className="ml-2 underline" onClick={() => setPaletteDrag(null)}>취소</button>
               </div>
             )}
+
+            <div className="mt-5 border-t border-slate-200 pt-3">
+              <div className="mb-2 text-xs font-semibold text-slate-500">스냅</div>
+              <input className="input" type="number" min={1} max={50} value={snap}
+                onChange={(e) => setSnap(Math.max(1, +e.target.value))} />
+            </div>
           </aside>
         )}
 
@@ -286,6 +234,8 @@ export function SeatsPage() {
             className="relative border border-slate-300 bg-white"
             style={{
               width, height,
+              marginLeft: offsetX, marginTop: offsetY,
+              zIndex: offsetZ,
               backgroundImage:
                 `linear-gradient(to right, #f1f5f9 1px, transparent 1px),
                  linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)`,
@@ -294,90 +244,241 @@ export function SeatsPage() {
             }}
           >
             {[...seats].sort((a, b) => (a.z ?? 0) - (b.z ?? 0)).map((s) => (
-              <div
-                key={s.id}
+              <SeatBox key={s.id} seat={s} mode={mode} selected={selectedId === s.id}
+                students={students} attState={attState} subs={subs}
                 onMouseDown={(e) => onSeatMouseDown(e, s)}
-                style={{
-                  position: 'absolute',
-                  left: s.x, top: s.y, width: s.w, height: s.h,
-                  zIndex: s.z ?? 0,
-                }}
-                className={`group ${mode === 'edit' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${
-                  selectedId === s.id ? 'outline outline-2 outline-brand-600' : ''
-                }`}
-              >
-                {renderSeatDeco(s)}
-                {mode === 'edit' && selectedId === s.id && (
-                  <div
-                    onMouseDown={(e) => onResizeMouseDown(e, s)}
-                    className="absolute -bottom-1 -right-1 h-3 w-3 cursor-se-resize rounded-sm bg-brand-600"
-                  />
-                )}
-              </div>
+                onResizeMouseDown={(e) => onResizeMouseDown(e, s)}
+              />
             ))}
           </div>
         </div>
 
         {mode === 'edit' && (
           <aside className="w-72 shrink-0 border-l border-slate-200 bg-white p-4">
-            <div className="mb-2 text-xs font-semibold text-slate-500">선택 항목</div>
-            {!selected && <p className="text-sm text-slate-400">좌석/도형을 선택하세요.</p>}
-            {selected && (
-              <div className="space-y-3 text-sm">
-                <div className="text-xs text-slate-500">유형: {selected.type}</div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <label>좌석번호/라벨
-                    <input className="input mt-1" value={selected.label}
-                      onChange={(e) => updateSelected({ label: e.target.value })} />
-                  </label>
-                  <label>분류
-                    <input className="input mt-1" value={selected.tag ?? ''} placeholder="고정석"
-                      onChange={(e) => updateSelected({ tag: e.target.value })} />
-                  </label>
-                </div>
-
-                <div className="border-t border-slate-200 pt-3">
-                  <div className="mb-1 text-center text-xs font-semibold text-slate-500">배치도</div>
-                  <div className="grid grid-cols-5 gap-1 text-center text-[11px] text-slate-500">
-                    <div>넓이</div><div>높이</div><div>X</div><div>Y</div><div>Z</div>
+            {!selected ? (
+              <div>
+                <div className="mb-3 text-center text-sm font-bold text-slate-800">배치도</div>
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="좌석수">
+                      <input className="input p-1.5 text-center font-mono" value={seatCount} readOnly />
+                    </Field>
+                    <Field label="배정">
+                      <input className="input p-1.5 text-center font-mono" value={assignedCount} readOnly />
+                    </Field>
                   </div>
-                  <div className="mt-1 grid grid-cols-5 gap-1">
-                    <input className="input p-1 text-center" type="number" value={selected.w}
-                      onChange={(e) => updateSelected({ w: Math.max(10, +e.target.value) })} />
-                    <input className="input p-1 text-center" type="number" value={selected.h}
-                      onChange={(e) => updateSelected({ h: Math.max(10, +e.target.value) })} />
-                    <input className="input p-1 text-center" type="number" value={selected.x}
-                      onChange={(e) => updateSelected({ x: clampX(+e.target.value, selected.w) })} />
-                    <input className="input p-1 text-center" type="number" value={selected.y}
-                      onChange={(e) => updateSelected({ y: clampY(+e.target.value, selected.h) })} />
-                    <input className="input p-1 text-center" type="number" value={selected.z ?? 0}
-                      onChange={(e) => updateSelected({ z: +e.target.value })} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="넓이">
+                      <input className="input p-1.5 text-center" type="number" value={width}
+                        onChange={(e) => setWidth(Math.max(400, +e.target.value))} />
+                    </Field>
+                    <Field label="높이">
+                      <input className="input p-1.5 text-center" type="number" value={height}
+                        onChange={(e) => setHeight(Math.max(400, +e.target.value))} />
+                    </Field>
                   </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <Field label="X">
+                      <input className="input p-1.5 text-center" type="number" value={offsetX}
+                        onChange={(e) => setOffsetX(+e.target.value)} />
+                    </Field>
+                    <Field label="Y">
+                      <input className="input p-1.5 text-center" type="number" value={offsetY}
+                        onChange={(e) => setOffsetY(+e.target.value)} />
+                    </Field>
+                    <Field label="Z">
+                      <input className="input p-1.5 text-center" type="number" value={offsetZ}
+                        onChange={(e) => setOffsetZ(+e.target.value)} />
+                    </Field>
+                  </div>
+                  <p className="pt-2 text-[11px] leading-relaxed text-slate-400">
+                    좌석/도형을 선택하면 해당 항목의 속성으로 전환됩니다.
+                  </p>
                 </div>
+              </div>
+            ) : (
+              <div>
+                <div className="mb-3 flex items-center justify-between">
+                  <div className="text-sm font-semibold text-slate-800">{selected.label} — {selected.type}</div>
+                  <button className="text-xs text-rose-500 hover:underline" onClick={deleteSelected}>삭제</button>
+                </div>
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Field label="좌석번호/라벨">
+                      <input className="input" value={selected.label}
+                        onChange={(e) => updateSelected({ label: e.target.value })} />
+                    </Field>
+                    <Field label="분류">
+                      <input className="input" value={selected.tag ?? ''} placeholder="고정석"
+                        onChange={(e) => updateSelected({ tag: e.target.value })} />
+                    </Field>
+                  </div>
 
-                {selected.type === 'seat' && (
-                  <label className="block">배정 학생
-                    <select className="input mt-1"
-                      value={selected.assignedStudentId ?? ''}
-                      onChange={(e) => updateSelected({ assignedStudentId: e.target.value || null })}>
-                      <option value="">(미배정)</option>
-                      {students.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
-                    </select>
-                  </label>
-                )}
+                  <div className="border-t border-slate-200 pt-3">
+                    <div className="mb-1 text-center text-xs font-semibold text-slate-500">배치도</div>
+                    <div className="grid grid-cols-5 gap-1 text-center text-[11px] text-slate-500">
+                      <div>넓이</div><div>높이</div><div>X</div><div>Y</div><div>Z</div>
+                    </div>
+                    <div className="mt-1 grid grid-cols-5 gap-1">
+                      <input className="input p-1 text-center" type="number" value={selected.w}
+                        onChange={(e) => updateSelected({ w: Math.max(10, +e.target.value) })} />
+                      <input className="input p-1 text-center" type="number" value={selected.h}
+                        onChange={(e) => updateSelected({ h: Math.max(10, +e.target.value) })} />
+                      <input className="input p-1 text-center" type="number" value={selected.x}
+                        onChange={(e) => updateSelected({ x: clampX(+e.target.value, selected.w) })} />
+                      <input className="input p-1 text-center" type="number" value={selected.y}
+                        onChange={(e) => updateSelected({ y: clampY(+e.target.value, selected.h) })} />
+                      <input className="input p-1 text-center" type="number" value={selected.z ?? 0}
+                        onChange={(e) => updateSelected({ z: +e.target.value })} />
+                    </div>
+                  </div>
 
-                <button className="btn-danger w-full" onClick={deleteSelected}>삭제</button>
+                  {selected.type === 'seat' && (
+                    <Field label="배정 학생">
+                      <select className="input"
+                        value={selected.assignedStudentId ?? ''}
+                        onChange={(e) => updateSelected({ assignedStudentId: e.target.value || null })}>
+                        <option value="">(미배정)</option>
+                        {students.map((st) => <option key={st.id} value={st.id}>{st.name}</option>)}
+                      </select>
+                    </Field>
+                  )}
+                </div>
               </div>
             )}
-
-            <div className="mt-6 border-t border-slate-200 pt-3 text-xs text-slate-500">
-              총 좌석: <b className="text-slate-700">{seats.filter((s) => s.type === 'seat').length}</b>
-              {' · '}배정: <b className="text-slate-700">{seats.filter((s) => s.type === 'seat' && s.assignedStudentId).length}</b>
-            </div>
           </aside>
         )}
       </div>
     </>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="mb-1 block text-center text-[11px] text-slate-500">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function SeatBox({
+  seat, mode, selected, students, attState, subs, onMouseDown, onResizeMouseDown,
+}: {
+  seat: Seat;
+  mode: EditorMode;
+  selected: boolean;
+  students: ReturnType<typeof useStudents.getState>['list'];
+  attState: ReturnType<typeof useAttendance.getState>['state'];
+  subs: ReturnType<typeof usePlans.getState>['subs'];
+  onMouseDown: (e: React.MouseEvent) => void;
+  onResizeMouseDown: (e: React.MouseEvent) => void;
+}) {
+  // 비-좌석 도형: 기존 컬러 박스 렌더
+  if (seat.type !== 'seat') {
+    const map = {
+      desk: 'bg-amber-100 ring-amber-300',
+      room: 'bg-sky-50 ring-sky-300',
+      wall: 'bg-slate-300 ring-slate-500',
+      door: 'bg-orange-100 ring-orange-400',
+      label: 'bg-white ring-slate-300',
+    } as const;
+    return (
+      <div
+        onMouseDown={onMouseDown}
+        style={{ position: 'absolute', left: seat.x, top: seat.y, width: seat.w, height: seat.h, zIndex: seat.z ?? 0 }}
+        className={`${mode === 'edit' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${
+          selected ? 'outline outline-2 outline-brand-600' : ''
+        }`}
+      >
+        <div className={`flex h-full w-full select-none items-center justify-center rounded text-xs font-semibold ring-1 ${map[seat.type as keyof typeof map] ?? ''}`}>
+          {seat.label}
+        </div>
+        {mode === 'edit' && selected && (
+          <div onMouseDown={onResizeMouseDown}
+            className="absolute -bottom-1 -right-1 h-3 w-3 cursor-se-resize rounded-sm bg-brand-600" />
+        )}
+      </div>
+    );
+  }
+
+  const student = seat.assignedStudentId ? students.find((x) => x.id === seat.assignedStudentId) : null;
+  const att = student ? attState[student.id] : undefined;
+  const state: 'in' | 'temp' | 'idle' | 'empty' =
+    !student ? 'empty'
+    : att?.state === 'in' ? 'in'
+    : att?.state === 'temp_out' ? 'temp'
+    : 'idle';
+
+  // 상태별 색상 — 헤더 배경과 좌석 번호 칩
+  const headerBgByState = {
+    in: 'bg-emerald-200',         // 입실: 연두
+    temp: 'bg-amber-200',          // 외출: 노랑
+    idle: 'bg-slate-200',         // 퇴실/이용중인데 미입실: 회색
+    empty: 'bg-slate-200',
+  }[state];
+  const numChipByState = {
+    in: 'bg-emerald-500 text-white',
+    temp: 'bg-amber-500 text-white',
+    idle: 'bg-slate-500 text-white',
+    empty: 'bg-slate-500 text-white',
+  }[state];
+
+  const sub = student
+    ? subs.filter((x) => x.studentId === student.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0]
+    : null;
+  const endAt = sub?.endAt;
+
+  return (
+    <div
+      onMouseDown={onMouseDown}
+      style={{ position: 'absolute', left: seat.x, top: seat.y, width: seat.w, height: seat.h, zIndex: seat.z ?? 0 }}
+      className={`${mode === 'edit' ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${
+        selected ? 'outline outline-2 outline-brand-600' : ''
+      }`}
+    >
+      <div className="flex h-full w-full select-none flex-col overflow-hidden rounded-md border border-slate-300 bg-white shadow-sm">
+        {/* 헤더: 번호 칩 + 분류 */}
+        <div className={`flex items-center gap-1 px-1 py-0.5 text-[11px] ${headerBgByState}`}>
+          <span className={`inline-block min-w-[20px] rounded px-1 text-center font-bold leading-tight ${numChipByState}`}>
+            {seat.label}
+          </span>
+          <span className="font-medium text-slate-700">{seat.tag ?? '고정석'}</span>
+        </div>
+
+        {/* 본문 */}
+        {student ? (
+          <div className="flex flex-1 flex-col justify-between px-1.5 py-1 text-[10px]">
+            <div className="flex items-center gap-1 text-slate-600">
+              {endAt && (
+                <>
+                  <span className="font-mono">{expiryShort(endAt)}</span>
+                  <span className={`font-semibold ${ddayOf(endAt) <= 7 ? 'text-rose-500' : 'text-slate-500'}`}>
+                    {ddayLabel(ddayOf(endAt))}
+                  </span>
+                </>
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="truncate font-semibold text-slate-800">{student.name}</span>
+              <span className={
+                student.gender === 'M' ? 'text-sky-500'
+                : student.gender === 'F' ? 'text-pink-500'
+                : 'text-slate-300'
+              }>
+                {student.gender === 'M' ? '♂' : student.gender === 'F' ? '♀' : ''}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 bg-white" />
+        )}
+      </div>
+
+      {mode === 'edit' && selected && (
+        <div onMouseDown={onResizeMouseDown}
+          className="absolute -bottom-1 -right-1 h-3 w-3 cursor-se-resize rounded-sm bg-brand-600" />
+      )}
+    </div>
   );
 }

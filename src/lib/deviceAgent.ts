@@ -126,7 +126,9 @@ class DeviceAgent {
 export const deviceAgent = new DeviceAgent();
 
 // 환경변수로 모의/실제 전환
-if (import.meta.env.VITE_DEVICE_AGENT === 'mock' || !import.meta.env.VITE_DEVICE_AGENT) {
+// 기본값: 실제 Bridge 연결 시도.
+// 명시적으로 mock 강제하려면 .env 에 VITE_DEVICE_AGENT=mock
+if (import.meta.env.VITE_DEVICE_AGENT === 'mock') {
   deviceAgent.enableMock();
 } else {
   deviceAgent.connect();

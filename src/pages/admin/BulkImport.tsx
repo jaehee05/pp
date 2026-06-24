@@ -166,6 +166,92 @@ export function BulkImportPage() {
     setRunning(false);
   }
 
+  async function rematchSeatsOnly() {
+    if (!confirm(`기존 회원 정보(학부모 번호 등)는 그대로 두고 ROWS의 좌석번호대로 좌석 배정만 다시 진행합니다.\n진행할까요?`)) return;
+    setRunning(true); setLog([]); setDone(false);
+
+    // 1) 회원 매칭 (이름 + 전화)
+    const nameToStudent = new Map<string, string>();
+    for (const s of studentList) nameToStudent.set(`${s.name}|${s.phone}`, s.id);
+
+    // 2) 좌석 레이아웃 로드
+    let layout: { seats?: Seat[] } | null = null;
+    try {
+      const raw = await firestoreStorage.getItem(SEAT_STORE_KEY);
+      if (raw) layout = JSON.parse(raw);
+    } catch (e) {
+      append(`⚠️ 배치도 로드 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setRunning(false); return;
+    }
+    const seats: Seat[] = layout?.seats ?? [];
+    if (seats.length === 0) {
+      append('❌ 배치도에 좌석이 없습니다. /admin/layouts/seats 에서 먼저 깔아주세요.');
+      setRunning(false); return;
+    }
+
+    // 3) 기존 ROWS 회원의 좌석 배정 먼저 모두 해제 (좌석 번호가 바뀐 경우 대비)
+    const targetStudentIds = new Set<string>();
+    for (const r of ROWS) {
+      const sid = nameToStudent.get(`${r.name}|${r.phone}`);
+      if (sid) targetStudentIds.add(sid);
+    }
+    let cleared = 0;
+    for (const seat of seats) {
+      if (seat.assignedStudentId && targetStudentIds.has(seat.assignedStudentId)) {
+        seat.assignedStudentId = null;
+        cleared++;
+      }
+    }
+    if (cleared > 0) append(`🪑 기존 ROWS 회원 좌석 ${cleared}석 일단 해제 (재매칭 위해)`);
+
+    // 4) ROWS 순회하며 좌석 번호로 매칭 + 배정
+    let assigned = 0; let missingStudent = 0; let missingSeat = 0; let alreadyOk = 0;
+    for (const r of ROWS) {
+      const sid = nameToStudent.get(`${r.name}|${r.phone}`);
+      if (!sid) {
+        append(`⚠️ ${r.name} — 회원 없음 (등록 안 됨)`);
+        missingStudent++;
+        continue;
+      }
+      const targetNum = parseInt(r.seatLabel, 10);
+      const seat = seats.find((s) =>
+        s.type === 'seat' && !s.assignedStudentId &&
+        !isNaN(targetNum) && parseInt(s.label, 10) === targetNum,
+      );
+      if (!seat) {
+        // 이미 그 좌석이 다른 사람한테 가있으면?
+        const occupied = seats.find((s) => s.type === 'seat' && parseInt(s.label, 10) === targetNum);
+        if (occupied?.assignedStudentId === sid) {
+          alreadyOk++;
+          continue;
+        }
+        append(`❌ ${r.name} → 좌석 ${r.seatLabel} ${occupied ? '이미 다른 사람' : '배치도에 없음'}`);
+        missingSeat++;
+        continue;
+      }
+      seat.assignedStudentId = sid;
+      const history = seat.assignmentHistory ?? [];
+      history.push({ studentId: sid, assignedAt: Date.now() });
+      seat.assignmentHistory = history;
+      assigned++;
+      append(`✅ ${r.name} → 좌석 ${r.seatLabel}`);
+    }
+
+    // 5) 저장
+    if (layout) {
+      layout.seats = seats;
+      try {
+        await firestoreStorage.setItem(SEAT_STORE_KEY, JSON.stringify(layout));
+        append(`💾 배치도 저장 완료`);
+      } catch (e) {
+        append(`⚠️ 배치도 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+    append('');
+    append(`완료: 배정 ${assigned} / 이미 OK ${alreadyOk} / 회원없음 ${missingStudent} / 좌석없음 ${missingSeat}`);
+    setRunning(false);
+  }
+
   function bulkSetMsgReceive(target: 'student' | 'parent', value: boolean) {
     const label = target === 'parent' ? '학부모' : '본인';
     if (!confirm(`전체 회원(${studentList.length}명)의 ${label} 메시지 수신을 ${value ? 'ON' : 'OFF'} 으로 일괄 변경합니다. 진행할까요?`)) return;
@@ -309,7 +395,15 @@ export function BulkImportPage() {
                 좌석은 좌석번호(label)로 자동 매칭. 배치도에 해당 번호 없으면 좌석만 미배정.
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                className="rounded-md bg-emerald-600 px-4 py-3 text-sm font-semibold text-white hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-500"
+                onClick={rematchSeatsOnly}
+                disabled={running}
+                title="회원 정보는 그대로, ROWS의 좌석번호대로 좌석 배정만 다시"
+              >
+                🪑 좌석만 재배정
+              </button>
               <button
                 className="rounded-md bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700 disabled:bg-slate-200 disabled:text-slate-500"
                 onClick={clearImported}
@@ -339,7 +433,7 @@ export function BulkImportPage() {
           <p className="mb-4 text-xs text-slate-500">
             현재 등록된 모든 회원({studentList.length}명)의 메시지 수신 설정을 한 번에 변경합니다.
           </p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
             <div className="rounded-md border border-slate-200 p-4">
               <div className="mb-2 text-sm font-semibold text-slate-700">학부모 메시지 수신</div>
               <div className="flex gap-2">

@@ -28,7 +28,6 @@ const NAV: NavItem[] = [
     ],
   },
   { to: '/admin/seat-plans', label: '좌석 이용권 관리', icon: '🎫' },
-  { to: '/admin/room-plans', label: '룸/사물함 이용권 관리', icon: '🗂️' },
   {
     label: '메시지 발송 관리', icon: '💬', children: [
       { to: '/admin/messages/templates', label: '템플릿' },
@@ -38,9 +37,8 @@ const NAV: NavItem[] = [
     ],
   },
   {
-    label: '배치도/사물함 관리', icon: '🧩', children: [
+    label: '배치도 관리', icon: '🧩', children: [
       { to: '/admin/layouts/seats', label: '좌석 배치' },
-      { to: '/admin/layouts/lockers', label: '사물함 배치' },
     ],
   },
 ];

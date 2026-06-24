@@ -39,22 +39,17 @@ export default function App() {
           <Route path="store/hours" element={<SimpleStub title="운영 시간" />} />
           <Route path="account" element={<AccountPage />} />
           <Route path="seat-plans" element={<PlansPage category="seat" />} />
-          <Route path="room-plans" element={<PlansPage category="room" />} />
           <Route path="messages/templates" element={<MessagesTemplates />} />
           <Route path="messages/history" element={<MessagesHistory />} />
           <Route path="messages/balance" element={<MessagesBalance />} />
           <Route path="messages/ppurio" element={<PpurioSettingsPage />} />
           <Route path="bulk-import" element={<BulkImportPage />} />
           <Route path="layouts/seats" element={<SeatsPage />} />
-          <Route path="layouts/lockers" element={<SimpleStub title="사물함 배치" />} />
         </Route>
 
         <Route path="/ops" element={<RequireAuth><OpsLayout /></RequireAuth>}>
           <Route index element={<Navigate to="/ops/layout" replace />} />
           <Route path="layout" element={<SeatsPage editable={false} />} />
-          <Route path="rooms" element={<OpsStub title="룸 운영" />} />
-          <Route path="lockers" element={<OpsStub title="사물함 운영" />} />
-          <Route path="shoes" element={<OpsStub title="신발장 운영" />} />
           <Route path="notices" element={<OpsStub title="전달사항" />} />
           <Route path="reservations" element={<OpsStub title="예약문의" />} />
           <Route path="register" element={<OpsRegister />} />

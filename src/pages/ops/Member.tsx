@@ -268,7 +268,7 @@ export function OpsMember() {
         {/* 기본 회원 정보 */}
         <section className="card p-6">
           <h3 className="mb-4 font-semibold">기본 회원 정보</h3>
-          <div className="grid grid-cols-12 gap-x-6 gap-y-4 text-sm">
+          <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-6 md:gap-y-4 text-sm">
             <Field label="성함" col={4}>
               <input className="input" value={v?.name ?? ''} readOnly={!editMode}
                 onChange={(e) => setDraftField('name', e.target.value)} />
@@ -474,7 +474,7 @@ export function OpsMember() {
         {/* 이용권 선택 */}
         <section className="card p-6">
           <h3 className="mb-3 font-semibold">이용권 선택</h3>
-          <div className="grid grid-cols-12 gap-x-4 gap-y-3 text-sm">
+          <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">
             <Field label="좌석타입" col={3}>
               <select className="input" value={planSeatType}
                 onChange={(e) => { setPlanSeatType(e.target.value as '' | 'fixed' | 'free'); setSelectedPlanId(''); }}>

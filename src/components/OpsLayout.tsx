@@ -5,9 +5,6 @@ import { MemberPanel } from './MemberPanel';
 
 const NAV = [
   { to: '/ops/layout', label: '배치도', icon: '🧩' },
-  { to: '/ops/rooms', label: '룸', icon: '🏠' },
-  { to: '/ops/lockers', label: '사물함', icon: '🗄️' },
-  { to: '/ops/shoes', label: '신발장', icon: '👟' },
   { to: '/ops/notices', label: '전달사항', icon: '📢' },
   { to: '/ops/reservations', label: '예약문의', icon: '🗓️' },
   { to: '/ops/register', label: '회원등록', icon: '➕' },

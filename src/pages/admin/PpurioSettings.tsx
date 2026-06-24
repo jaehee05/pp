@@ -56,7 +56,7 @@ export function PpurioSettingsPage() {
       <div className="space-y-4 p-6">
         <div className="card p-6">
           <h3 className="mb-4 font-semibold">계정·인증</h3>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 text-sm">
             <Field label="뿌리오 계정 ID (ppurioAccount)">
               <input className="input" value={draft.ppurioAccount}
                 onChange={(e) => setDraft({ ...draft, ppurioAccount: e.target.value })} />
@@ -85,7 +85,7 @@ export function PpurioSettingsPage() {
             뿌리오는 IP 화이트리스트 인증 — 고정 IP를 가진 VM에 띄운 프록시 경유.
             (2027-consulting/vm-proxy 와 동일 구조)
           </p>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 md:gap-4 text-sm">
             <Field label="프록시 URL">
               <input className="input font-mono" value={draft.proxyUrl}
                 onChange={(e) => setDraft({ ...draft, proxyUrl: e.target.value })}
@@ -165,7 +165,7 @@ export function PpurioSettingsPage() {
 
         <div className="card p-6">
           <h3 className="mb-3 font-semibold">테스트 발송 (SMS)</h3>
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 text-sm">
             <label>수신 번호
               <input className="input mt-1" value={testPhone} onChange={(e) => setTestPhone(e.target.value)}
                 placeholder="01000000000" />

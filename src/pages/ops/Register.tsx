@@ -42,7 +42,7 @@ export function OpsRegister() {
         <div className="card p-6">
           <h3 className="mb-4 font-semibold">기본 회원 정보</h3>
 
-          <div className="grid grid-cols-12 gap-x-6 gap-y-4 text-sm">
+          <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-6 md:gap-y-4 text-sm">
             <Field label="성함" required col={4}>
               <input className="input" value={v.name} onChange={(e) => setV({ ...v, name: e.target.value })} />
             </Field>

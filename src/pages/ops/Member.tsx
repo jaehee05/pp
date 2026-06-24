@@ -181,6 +181,40 @@ export function OpsMember() {
     setPayments((prev) => prev.filter((_, idx) => idx !== i));
   }
 
+  // 주문의 메인/서브 사업자별 금액 합계 (이용권 기준)
+  const vendorTotals = useMemo(() => {
+    let main = 0, sub = 0;
+    for (const item of order) {
+      if (item.kind === 'plan') {
+        const pl = plans.find((p) => p.id === item.planId);
+        main += pl?.taxFreeAmount ?? 0;
+        sub += pl?.taxableAmount ?? 0;
+      } else {
+        // 기타/할인은 메인으로 잡음
+        main += item.amount;
+      }
+    }
+    return { main, sub };
+  }, [order, plans]);
+
+  async function callCardPay(amount: number, merchant: 'main' | 'sub', tag: string): Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }> {
+    if (!student) return { ok: false, error: 'no student' };
+    setPayStatus(`${tag} 카드 결제 ${amount.toLocaleString()}원 — 단말기에 카드를 긁어주세요…`);
+    return new Promise((resolve) => {
+      const off = deviceAgent.on((e) => {
+        if (e.type !== 'card_payment_result') return;
+        off(); resolve(e);
+      });
+      deviceAgent.send({
+        id: `pay_${Date.now()}_${merchant}`,
+        cmd: 'card_pay',
+        amount,
+        orderId: `ord_${student.id}_${merchant}_${Date.now().toString(36)}`,
+        merchant,
+      });
+    });
+  }
+
   async function processPayment() {
     if (!student) return;
     if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
@@ -192,29 +226,25 @@ export function OpsMember() {
         const p = payments[i];
         if (p.amount === 0) { splits.push(p); continue; }
         if (p.method === 'card') {
-          setPayStatus(`카드 결제 ${i + 1}/${payments.length} — 단말기에 카드를 긁어주세요…`);
-          const result = await new Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }>((resolve) => {
-            const off = deviceAgent.on((e) => {
-              if (e.type !== 'card_payment_result') return;
-              off(); resolve(e);
-            });
-            // 주문의 첫 이용권 사업자로 결제 라우팅. 다른 사업자 섞여 있으면 추가 작업 필요.
-            const firstPlanItem = order.find((it) => it.kind === 'plan');
-            const firstPlan = firstPlanItem ? plans.find((pl) => pl.id === firstPlanItem.planId) : undefined;
-            const merchant: 'main' | 'sub' = firstPlan?.vendor === 'sub' ? 'sub' : 'main';
-            deviceAgent.send({
-              id: `pay_${Date.now()}_${i}`,
-              cmd: 'card_pay',
-              amount: p.amount,
-              orderId: `ord_${student.id}_${i}`,
-              merchant,
-            });
-          });
-          if (!result.ok) {
-            setPayStatus(`결제 실패: ${result.error ?? '카드 승인 거절'}`);
-            return;
+          // 카드 결제는 메인/서브로 비례 분할해 2회 단말기 호출
+          const ratio = orderTotal > 0 ? p.amount / orderTotal : 1;
+          const mainPart = Math.round(vendorTotals.main * ratio);
+          const subPart = p.amount - mainPart;
+          let combinedApprovalNo = '';
+          let combinedTxId = '';
+          if (mainPart > 0) {
+            const r1 = await callCardPay(mainPart, 'main', '[메인 독서실]');
+            if (!r1.ok) { setPayStatus(`메인 결제 실패: ${r1.error ?? ''}`); return; }
+            combinedApprovalNo += r1.approvalNo ?? '';
+            combinedTxId += r1.txId ?? '';
           }
-          splits.push({ ...p, approvalNo: result.approvalNo, txId: result.txId });
+          if (subPart > 0) {
+            const r2 = await callCardPay(subPart, 'sub', '[서브 교습소]');
+            if (!r2.ok) { setPayStatus(`서브 결제 실패: ${r2.error ?? ''}`); return; }
+            combinedApprovalNo += (combinedApprovalNo ? '/' : '') + (r2.approvalNo ?? '');
+            combinedTxId += (combinedTxId ? '/' : '') + (r2.txId ?? '');
+          }
+          splits.push({ ...p, approvalNo: combinedApprovalNo, txId: combinedTxId });
         } else {
           splits.push(p);
         }

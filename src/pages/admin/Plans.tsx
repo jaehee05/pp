@@ -70,10 +70,9 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
                 <th className="px-3 py-2 text-left">기간</th>
                 <th className="px-3 py-2 text-left">구분</th>
                 {category === 'seat' && <th className="px-3 py-2 text-left">좌석</th>}
-                <th className="px-3 py-2 text-right">면세금액</th>
-                <th className="px-3 py-2 text-right">과세금액</th>
-                <th className="px-3 py-2 text-right">합계금액</th>
-                <th className="px-3 py-2 text-center">사업자</th>
+                <th className="px-3 py-2 text-right">메인 (독서실)</th>
+                <th className="px-3 py-2 text-right">서브 (교습소)</th>
+                <th className="px-3 py-2 text-right">합계</th>
                 <th className="px-3 py-2 text-left">설명</th>
                 <th className="px-3 py-2 text-left">할인정책</th>
                 <th className="px-3 py-2 text-center">사물함</th>
@@ -82,7 +81,7 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
             </thead>
             <tbody>
               {list.length === 0 && (
-                <tr><td colSpan={12} className="px-3 py-10 text-center text-slate-400">등록된 이용권이 없습니다.</td></tr>
+                <tr><td colSpan={11} className="px-3 py-10 text-center text-slate-400">등록된 이용권이 없습니다.</td></tr>
               )}
               {list.map((p, i) => {
                 const hidden = !!p.hidden;
@@ -102,14 +101,13 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
                         </span>
                       </td>
                     )}
-                    <td className={`px-3 py-2 text-right font-mono ${rowCls}`}>{fmtMoney(p.taxFreeAmount ?? 0)}</td>
-                    <td className={`px-3 py-2 text-right font-mono ${rowCls}`}>{fmtMoney(p.taxableAmount ?? 0)}</td>
-                    <td className={`px-3 py-2 text-right font-mono font-semibold ${rowCls}`}>{fmtMoney(p.price)}</td>
-                    <td className={`px-3 py-2 text-center text-xs ${rowCls}`}>
-                      <span className={`rounded px-2 py-0.5 ${hidden ? 'bg-slate-100 text-slate-400' : (p.vendor === 'sub' ? 'bg-violet-100 text-violet-700' : 'bg-sky-100 text-sky-700')}`}>
-                        {p.vendor === 'sub' ? '서브(교습소)' : '메인(독서실)'}
-                      </span>
+                    <td className={`px-3 py-2 text-right font-mono ${rowCls} ${(p.taxFreeAmount ?? 0) > 0 ? 'text-sky-700' : 'text-slate-400'}`}>
+                      {fmtMoney(p.taxFreeAmount ?? 0)}
                     </td>
+                    <td className={`px-3 py-2 text-right font-mono ${rowCls} ${(p.taxableAmount ?? 0) > 0 ? 'text-violet-700' : 'text-slate-400'}`}>
+                      {fmtMoney(p.taxableAmount ?? 0)}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-mono font-semibold ${rowCls}`}>{fmtMoney(p.price)}</td>
                     <td className={`px-3 py-2 ${rowCls}`}>{p.description ?? ''}</td>
                     <td className={`px-3 py-2 ${rowCls}`}>{p.discountPolicy ?? ''}</td>
                     <td className={`px-3 py-2 text-center ${rowCls}`}>{p.includesLocker ? '포함' : '-'}</td>
@@ -190,13 +188,6 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
             </select>
           </label>
         )}
-        <label className="col-span-2">결제 사업자 (NICE VAN 라우팅)
-          <select className="input mt-1" value={v.vendor ?? 'main'}
-            onChange={(e) => setV({ ...v, vendor: e.target.value as 'main' | 'sub' })}>
-            <option value="main">메인 — 합격공간 독서실 (3285619001)</option>
-            <option value="sub">서브 — 합격공간 진학지도교습소 (3285620001)</option>
-          </select>
-        </label>
         <label>이용권 유형
           <select className="input mt-1" value={v.type}
             onChange={(e) => setV({ ...v, type: e.target.value as Plan['type'] })}>
@@ -224,20 +215,27 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
           </label>
         )}
 
-        <div className="col-span-2 grid grid-cols-3 gap-3 rounded-md bg-slate-50 p-3">
-          <label>면세금액 (원)
-            <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
-              value={v.taxFreeAmount ?? 0}
-              onChange={(e) => setV({ ...v, taxFreeAmount: +e.target.value })} />
-          </label>
-          <label>과세금액 (원)
-            <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
-              value={v.taxableAmount ?? 0}
-              onChange={(e) => setV({ ...v, taxableAmount: +e.target.value })} />
-          </label>
-          <label>합계금액 (자동)
-            <input className="input mt-1 bg-white text-right font-mono font-semibold" type="number" value={total} readOnly />
-          </label>
+        <div className="col-span-2 rounded-md bg-slate-50 p-3">
+          <p className="mb-2 text-xs text-slate-500">
+            결제 시 두 사업자로 자동 분할됨. 한쪽 0으로 두면 그쪽 거래 생략.
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            <label>메인 사업자 결제 (원)
+              <span className="ml-1 text-[10px] text-sky-600">독서실</span>
+              <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
+                value={v.taxFreeAmount ?? 0}
+                onChange={(e) => setV({ ...v, taxFreeAmount: +e.target.value })} />
+            </label>
+            <label>서브 사업자 결제 (원)
+              <span className="ml-1 text-[10px] text-violet-600">교습소</span>
+              <input className="input mt-1 text-right font-mono" type="number" min={0} step={100}
+                value={v.taxableAmount ?? 0}
+                onChange={(e) => setV({ ...v, taxableAmount: +e.target.value })} />
+            </label>
+            <label>합계금액 (자동)
+              <input className="input mt-1 bg-white text-right font-mono font-semibold" type="number" value={total} readOnly />
+            </label>
+          </div>
         </div>
 
         <label className="col-span-2">설명 (선택)

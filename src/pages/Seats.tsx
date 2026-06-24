@@ -102,25 +102,6 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const [typeSeatId, setTypeSeatId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
-  // 운영 뷰(editable=false)에서 캔버스가 viewport 보다 넓으면 자동 축소.
-  // 편집 뷰는 픽셀 단위 정확 편집을 위해 scale=1 유지.
-  const [autoScale, setAutoScale] = useState(1);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (editable) { setAutoScale(1); return; }
-    function compute() {
-      const el = scrollContainerRef.current;
-      if (!el) return;
-      const avail = el.clientWidth - 16; // 양쪽 패딩 여유
-      if (avail <= 0 || width <= 0) return;
-      setAutoScale(Math.min(1, avail / width));
-    }
-    compute();
-    const obs = new ResizeObserver(compute);
-    if (scrollContainerRef.current) obs.observe(scrollContainerRef.current);
-    window.addEventListener('resize', compute);
-    return () => { obs.disconnect(); window.removeEventListener('resize', compute); };
-  }, [editable, width]);
 
   // 마운트 시 Firestore(원격)에서 배치도를 받아 반영. 다른 기기/도메인에서 저장한
   // 좌석도 여기로 동기화된다. 원격 로드 전엔 저장을 막아 빈 데이터로 덮어쓰지 않는다.
@@ -433,14 +414,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
           </aside>
         )}
 
-        <div ref={scrollContainerRef} className="flex-1 overflow-auto bg-slate-100 p-2 sm:p-6">
-          <div
-            style={{
-              // 스케일 적용 시 부모 높이를 함께 축소해 빈 공간 안 생기게.
-              width: width * autoScale,
-              height: height * autoScale,
-            }}
-          >
+        <div className="flex-1 overflow-auto bg-slate-100 p-2 sm:p-6">
           <div
             ref={canvasRef}
             onClick={(e) => {
@@ -456,8 +430,6 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
               width, height,
               marginLeft: offsetX, marginTop: offsetY,
               zIndex: offsetZ,
-              transform: autoScale !== 1 ? `scale(${autoScale})` : undefined,
-              transformOrigin: 'top left',
               backgroundImage: editable
                 ? `linear-gradient(to right, #f1f5f9 1px, transparent 1px),
                    linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)`
@@ -473,7 +445,6 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
                 onResizeMouseDown={(e) => onResizeMouseDown(e, s)}
               />
             ))}
-          </div>
           </div>
         </div>
 
@@ -767,15 +738,15 @@ function SeatBox({
                 </div>
               );
             })() : <div className="px-1.5 py-0.5" />}
-            <div className="flex min-w-0 flex-nowrap items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5 text-[11px] leading-none">
-              <span className="min-w-0 flex-1 truncate font-semibold text-slate-800">{student.name}</span>
-              <span className={`shrink-0 text-[10px] leading-none ${
-                student.gender === 'M' ? 'text-sky-500'
-                : student.gender === 'F' ? 'text-pink-500'
-                : 'text-slate-300'
-              }`}>
-                {student.gender === 'M' ? '♂' : student.gender === 'F' ? '♀' : ''}
-              </span>
+            <div className="overflow-hidden whitespace-nowrap px-1.5 py-0.5 text-[11px] leading-none">
+              <span className="font-semibold text-slate-800">{student.name}</span>
+              {student.gender && (
+                <span className={`ml-0.5 text-[10px] ${
+                  student.gender === 'M' ? 'text-sky-500' : 'text-pink-500'
+                }`}>
+                  {student.gender === 'M' ? '♂' : '♀'}
+                </span>
+              )}
             </div>
           </div>
         ) : (

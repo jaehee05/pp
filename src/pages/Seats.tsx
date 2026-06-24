@@ -425,7 +425,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
             onMouseUp={onMouseUp}
             onMouseLeave={onMouseUp}
             onContextMenu={(e) => e.preventDefault()}
-            className="relative border border-slate-300 bg-white"
+            className={`relative ${editable ? 'border border-slate-300 bg-white' : ''}`}
             style={{
               width, height,
               marginLeft: offsetX, marginTop: offsetY,
@@ -738,8 +738,8 @@ function SeatBox({
                 </div>
               );
             })() : <div className="px-1.5 py-0.5" />}
-            <div className="flex min-w-0 items-baseline gap-0.5 px-1.5 py-0.5 text-[11px]">
-              <span className="truncate font-semibold text-slate-800">{student.name}</span>
+            <div className="flex min-w-0 flex-nowrap items-center gap-0.5 whitespace-nowrap px-1.5 py-0.5 text-[11px] leading-none">
+              <span className="min-w-0 flex-1 truncate font-semibold text-slate-800">{student.name}</span>
               <span className={`shrink-0 text-[10px] leading-none ${
                 student.gender === 'M' ? 'text-sky-500'
                 : student.gender === 'F' ? 'text-pink-500'

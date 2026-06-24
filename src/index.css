@@ -5,6 +5,9 @@
 html, body, #root {
   height: 100%;
   margin: 0;
+  /* 모바일 브라우저 자동 텍스트 확대 방지 (작은 좌석 카드 텍스트가 강제로 커져서 wrap되던 문제) */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {

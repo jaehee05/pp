@@ -111,7 +111,7 @@ export interface Payment {
   studentId: ID;
   planId: ID;
   amount: number;
-  method: 'card' | 'cash' | 'transfer';
+  method: 'card' | 'cash' | 'transfer' | 'remote' | 'localpay';
   cardApprovalNo?: string;
   cardIssuer?: string;
   installment?: number;

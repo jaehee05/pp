@@ -21,7 +21,14 @@ interface OrderItem {
   counts?: number;
   kind: 'plan' | 'etc' | 'discount';
 }
-interface PaymentSplit { method: 'card' | 'cash'; amount: number; approvalNo?: string; txId?: string }
+type PayMethod = 'card' | 'cash' | 'remote' | 'localpay';
+interface PaymentSplit { method: PayMethod; amount: number; approvalNo?: string; txId?: string }
+const METHOD_LABEL: Record<PayMethod, string> = {
+  card: '카드',
+  cash: '현금',
+  remote: '비대면',
+  localpay: '성남사랑',
+};
 
 export function OpsMember() {
   const { id = '' } = useParams();
@@ -152,13 +159,18 @@ export function OpsMember() {
   const orderTotal = order.reduce((s, i) => s + i.amount, 0);
   const paidTotal = payments.reduce((s, p) => s + p.amount, 0);
 
-  function syncAmount() {
+  // 주문 합계가 바뀌면 단일 결제수단인 경우 금액 자동 채움.
+  // (사용자가 분할 결제 행을 추가했거나 금액을 직접 수정한 뒤에는 건들지 않음 — 잔액 표시로 확인)
+  useEffect(() => {
     setPayments((prev) => {
-      const total = order.reduce((s, i) => s + i.amount, 0);
-      if (prev.length === 1) return [{ ...prev[0], amount: Math.max(0, total) }];
-      return prev;
+      if (prev.length !== 1) return prev;
+      // 사용자가 만진 흔적이 있어도 합계와 다르면 합계로 맞춰주기.
+      if (prev[0].amount === orderTotal) return prev;
+      return [{ ...prev[0], amount: Math.max(0, orderTotal) }];
     });
-  }
+  }, [orderTotal]);
+
+  function syncAmount() { /* useEffect 가 처리 — 노옵으로 남겨두기 (기존 호출부 호환) */ }
   function splitPayment() {
     setPayments((prev) => [...prev, { method: 'cash', amount: 0 }]);
   }
@@ -566,29 +578,43 @@ export function OpsMember() {
             <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
               onClick={splitPayment}>+ 분할결제</button>
           </div>
-          <ol className="mt-4 space-y-2 text-sm">
-            {payments.map((p, i) => (
-              <li key={i} className="grid grid-cols-12 items-center gap-3">
-                <span className="col-span-1 text-center text-slate-400">{i + 1}</span>
-                <div className="col-span-3">
-                  <div className="inline-flex overflow-hidden rounded-md ring-1 ring-slate-300">
-                    {(['card', 'cash'] as const).map((m) => (
+          <ol className="mt-4 space-y-3 text-sm">
+            {payments.map((p, i) => {
+              const external = p.method === 'remote' || p.method === 'localpay';
+              return (
+              <li key={i} className="grid grid-cols-1 items-center gap-2 sm:grid-cols-12 sm:gap-3">
+                <span className="hidden text-center text-slate-400 sm:col-span-1 sm:block">{i + 1}</span>
+                <div className="sm:col-span-5">
+                  <div className="flex flex-wrap overflow-hidden rounded-md ring-1 ring-slate-300">
+                    {(['card', 'cash', 'remote', 'localpay'] as const).map((m) => (
                       <button key={m} onClick={() => updateSplit(i, { method: m })}
-                        className={`px-4 py-1.5 text-sm ${p.method === m ? 'bg-brand-100 text-brand-700 font-semibold' : 'bg-white text-slate-600'}`}>
-                        {m === 'card' ? '카드' : '현금'}
+                        className={`flex-1 px-2 py-1.5 text-xs sm:px-3 sm:text-sm ${p.method === m
+                          ? (m === 'remote' || m === 'localpay'
+                            ? 'bg-amber-100 text-amber-700 font-semibold'
+                            : 'bg-brand-100 text-brand-700 font-semibold')
+                          : 'bg-white text-slate-600'}`}>
+                        {METHOD_LABEL[m]}
                       </button>
                     ))}
                   </div>
                 </div>
-                <input className="input col-span-6 text-right font-mono" type="number" min={0} step={100}
-                  value={p.amount} onChange={(e) => updateSplit(i, { amount: +e.target.value })} />
-                <div className="col-span-2 text-right">
+                <input className="input text-right font-mono sm:col-span-5" type="number" min={0} step={100}
+                  value={p.amount}
+                  onChange={(e) => updateSplit(i, { amount: +e.target.value })}
+                  title={external ? '비대면/성남사랑은 단말기 거치지 않고 0원으로 기록할 수도 있음' : '결제할 금액'} />
+                <div className="text-right sm:col-span-1">
                   {payments.length > 1 && (
                     <button className="text-xs text-rose-500 hover:underline" onClick={() => removeSplit(i)}>삭제</button>
                   )}
                 </div>
+                {external && (
+                  <div className="text-[11px] text-amber-700 sm:col-span-12 sm:pl-12">
+                    ℹ️ 외부 결제 — 단말기 거치지 않고 기록만. 금액 0원으로 두면 영수 카운트 안 됨.
+                  </div>
+                )}
               </li>
-            ))}
+              );
+            })}
           </ol>
           <div className="mt-3 flex items-center justify-end gap-4 text-sm">
             <span className={paidTotal === orderTotal ? 'text-emerald-600' : 'text-rose-600'}>

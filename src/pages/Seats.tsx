@@ -721,7 +721,7 @@ function SeatBox({
 
         {/* 본문 */}
         {student ? (
-          <div className="flex flex-1 flex-col justify-between gap-0.5 leading-none">
+          <div className="flex flex-1 flex-col gap-0.5 pt-0.5 leading-none">
             {endAt ? (() => {
               const d = ddayOf(endAt);
               const urgent = d <= 3;
@@ -738,10 +738,10 @@ function SeatBox({
                 </div>
               );
             })() : <div className="px-1.5 py-0.5" />}
-            <div className="overflow-hidden whitespace-nowrap px-1.5 py-0.5 text-[11px] leading-none">
+            <div className="whitespace-nowrap px-1.5 pb-1 pt-0.5 text-[11px] leading-tight">
               <span className="font-semibold text-slate-800">{student.name}</span>
               {student.gender && (
-                <span className={`ml-0.5 text-[10px] ${
+                <span className={`ml-1 align-middle text-[12px] leading-none ${
                   student.gender === 'M' ? 'text-sky-500' : 'text-pink-500'
                 }`}>
                   {student.gender === 'M' ? '♂' : '♀'}

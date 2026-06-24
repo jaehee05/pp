@@ -738,10 +738,10 @@ function SeatBox({
                 </div>
               );
             })() : <div className="px-1.5 py-0.5" />}
-            <div className="whitespace-nowrap px-1.5 pb-1 pt-0.5 text-[11px] leading-tight">
+            <div className="whitespace-nowrap px-1.5 pb-0.5 pt-0.5 text-[11px] leading-tight">
               <span className="font-semibold text-slate-800">{student.name}</span>
               {student.gender && (
-                <span className={`ml-1 align-middle text-[12px] leading-none ${
+                <span className={`ml-1 text-[10px] ${
                   student.gender === 'M' ? 'text-sky-500' : 'text-pink-500'
                 }`}>
                   {student.gender === 'M' ? '♂' : '♀'}

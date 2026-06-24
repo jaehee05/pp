@@ -1,7 +1,7 @@
 import { WebSocketServer, type WebSocket } from 'ws';
 import { config } from './config.js';
 import { pay, cancel } from './nice-van.js';
-import { enrollFingerprint, onEvent } from './biostar.js';
+import { enrollFingerprint, listDevices, onEvent } from './biostar.js';
 
 // 브라우저(passplace.space)의 src/lib/deviceAgent.ts 와 동일한 프로토콜.
 // 명령 IN:  { id, cmd: 'enroll_fingerprint' | 'identify_fingerprint' | 'card_pay' | 'card_cancel', ... }
@@ -12,6 +12,7 @@ interface IncomingCmd {
   cmd: string;
   studentId?: string;
   studentName?: string;
+  deviceId?: string;
   amount?: number;
   installment?: number;
   orderId?: string;
@@ -73,12 +74,16 @@ export function startServer() {
         }
         else if (req.cmd === 'enroll_fingerprint') {
           ws.send(JSON.stringify({ type: 'fingerprint_enroll_progress', step: 1, total: 3 }));
-          const res = await enrollFingerprint(req.studentId ?? '', req.studentName ?? '');
+          const res = await enrollFingerprint(req.studentId ?? '', req.studentName ?? '', req.deviceId);
           if (res.ok) {
             ws.send(JSON.stringify({ type: 'fingerprint_enroll_done', fingerprintId: res.fingerprintId }));
           } else {
-            ws.send(JSON.stringify({ type: 'card_payment_result', ok: false, error: res.error })); // 임시 - enroll 실패 이벤트 추가 필요
+            ws.send(JSON.stringify({ type: 'fingerprint_enroll_failed', error: res.error ?? '지문 등록 실패' }));
           }
+        }
+        else if (req.cmd === 'list_devices') {
+          const devices = await listDevices();
+          ws.send(JSON.stringify({ type: 'device_list', devices }));
         }
         else if (req.cmd === 'identify_fingerprint') {
           // BioStar는 디바이스에서 직접 인식하면 이벤트 폴링으로 들어옴. no-op.

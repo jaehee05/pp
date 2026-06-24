@@ -8,11 +8,14 @@ export type DeviceEvent =
   | { type: 'fingerprint_scan'; fingerprintId: string; quality: number }
   | { type: 'fingerprint_enroll_progress'; step: number; total: number }
   | { type: 'fingerprint_enroll_done'; fingerprintId: string }
-  | { type: 'card_payment_result'; ok: boolean; approvalNo?: string; issuer?: string; txId?: string; error?: string };
+  | { type: 'fingerprint_enroll_failed'; error: string }
+  | { type: 'card_payment_result'; ok: boolean; approvalNo?: string; issuer?: string; txId?: string; error?: string }
+  | { type: 'device_list'; devices: { id: string; name: string; status?: string }[] };
 
 export type AgentRequest =
-  | { id: string; cmd: 'enroll_fingerprint'; studentId: string }
+  | { id: string; cmd: 'enroll_fingerprint'; studentId: string; studentName?: string; deviceId?: string }
   | { id: string; cmd: 'identify_fingerprint' }
+  | { id: string; cmd: 'list_devices' }
   | { id: string; cmd: 'card_pay'; amount: number; installment?: number; orderId: string; merchant?: 'main' | 'sub' }
   | { id: string; cmd: 'card_cancel'; approvalNo: string; amount: number };
 
@@ -83,6 +86,15 @@ class DeviceAgent {
         }), 500);
       };
       setTimeout(tick, 400);
+    }
+    if (req.cmd === 'list_devices') {
+      setTimeout(() => this.emit({
+        type: 'device_list',
+        devices: [
+          { id: 'dev_mock_n2', name: 'BioLite N2 (출입용)', status: 'normal' },
+          { id: 'dev_mock_biomini', name: 'BioMini Slim 2 (등록용)', status: 'normal' },
+        ],
+      }), 200);
     }
     if (req.cmd === 'identify_fingerprint') {
       setTimeout(() => this.emit({

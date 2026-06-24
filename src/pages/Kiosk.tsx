@@ -5,18 +5,23 @@ import { useStudents, type LocalStudent } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
 import { useBranding } from '../store/branding';
+import { useAuth, type Account } from '../store/auth';
 
+type Person = { kind: 'student'; data: LocalStudent } | { kind: 'admin'; data: Account };
 type Screen =
   | { kind: 'idle' }
-  | { kind: 'pickAction'; student: LocalStudent }
-  | { kind: 'done'; student: LocalStudent; action: '입실' | '퇴실' | '외출' | '복귀' }
+  | { kind: 'pickAction'; person: Person }
+  | { kind: 'done'; person: Person; action: '입실' | '퇴실' | '외출' | '복귀' }
   | { kind: 'error'; message: string };
+
+function nameOf(p: Person) { return p.data.name; }
 
 const IDLE_TIMEOUT_MS = 30_000;
 const DONE_TIMEOUT_MS = 3_500;
 
 export function KioskPage() {
   const students = useStudents((s) => s.list);
+  const accounts = useAuth((s) => s.accounts);
   const att = useAttendance();
   const subs = usePlans((s) => s.subs);
   const { brand, storeName } = useBranding();
@@ -39,15 +44,17 @@ export function KioskPage() {
       if (e.type === 'connected') setAgentConnected(true);
       else if (e.type === 'disconnected') setAgentConnected(false);
       else if (e.type === 'fingerprint_scan') {
-        // BioStar 사용자 ID = 학생 fingerprintId
+        // BioStar 사용자 ID 매칭: 학생 우선, 없으면 관리자
         const s = students.find((x) => x.fingerprintId === e.fingerprintId);
-        if (s) processStudent(s);
+        if (s) { processStudent({ kind: 'student', data: s }); return; }
+        const a = accounts.find((x) => x.fingerprintId === e.fingerprintId);
+        if (a && a.enableKioskAccess !== false) processStudent({ kind: 'admin', data: a });
       }
     });
     deviceAgent.connect();
     return () => { off(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students]);
+  }, [students, accounts]);
 
   // 아이들 자동 리셋
   function resetIdleTimer() {
@@ -67,32 +74,32 @@ export function KioskPage() {
     return subs.some((s) => s.studentId === studentId && s.status === 'active');
   }
 
-  // 학생 식별 후 다음 화면 결정
-  function processStudent(s: LocalStudent) {
-    if (!hasActiveSub(s.id)) {
-      setScreen({ kind: 'error', message: `${s.name}님 — 활성 이용권이 없습니다. 카운터에 문의하세요.` });
+  // 회원/관리자 식별 후 다음 화면 결정
+  function processStudent(p: Person) {
+    // 학생은 활성 이용권 필요. 관리자는 항상 통과.
+    if (p.kind === 'student' && !hasActiveSub(p.data.id)) {
+      setScreen({ kind: 'error', message: `${p.data.name}님 — 활성 이용권이 없습니다. 카운터에 문의하세요.` });
       setPin('');
       window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
       return;
     }
-    const cur = att.state[s.id];
+    // 출입 기록 ID — 학생/관리자 구분
+    const recordId = p.kind === 'admin' ? `admin_${p.data.id}` : p.data.id;
+    const cur = att.state[recordId];
     if (cur?.state === 'temp_out') {
-      // 외출 중이면 자동 복귀
-      att.returnFromTemp(s.id, 'fingerprint');
-      setScreen({ kind: 'done', student: s, action: '복귀' });
+      att.returnFromTemp(recordId, 'fingerprint');
+      setScreen({ kind: 'done', person: p, action: '복귀' });
       setPin('');
       window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
       return;
     }
     if (cur?.state === 'in') {
-      // 입실 중이면 외출/퇴실 선택
-      setScreen({ kind: 'pickAction', student: s });
+      setScreen({ kind: 'pickAction', person: p });
       setPin('');
       return;
     }
-    // 그 외 → 입실 처리
-    att.enter(s.id, 'fingerprint');
-    setScreen({ kind: 'done', student: s, action: '입실' });
+    att.enter(recordId, 'fingerprint');
+    setScreen({ kind: 'done', person: p, action: '입실' });
     setPin('');
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
@@ -122,32 +129,38 @@ export function KioskPage() {
 
   function tryIdentify(p: string) {
     if (p.length === 0) return;
-    // PIN 중복 가능성 → 동명 학생 여러 명 대응 필요시 추가 화면. 일단 첫 일치.
-    const matched = students.filter((s) => (s.pin ?? '').padStart(4, '0') === p.padStart(4, '0'));
-    if (matched.length === 0) {
-      setScreen({ kind: 'error', message: `PIN ${p} — 일치하는 회원이 없습니다.` });
-      setPin('');
-      window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
+    const padded = p.padStart(4, '0');
+    // 1) 학생 먼저 매칭
+    const stMatched = students.filter((s) => (s.pin ?? '').padStart(4, '0') === padded);
+    if (stMatched.length > 0) {
+      processStudent({ kind: 'student', data: stMatched[0] });
       return;
     }
-    if (matched.length === 1) {
-      processStudent(matched[0]);
+    // 2) 관리자 PIN
+    const adMatched = accounts.filter((a) =>
+      a.enableKioskAccess !== false &&
+      (a.kioskPin ?? '').padStart(4, '0') === padded,
+    );
+    if (adMatched.length > 0) {
+      processStudent({ kind: 'admin', data: adMatched[0] });
       return;
     }
-    // 중복 PIN — 이름 선택 화면 (간단히 첫번째 처리, 추후 개선 가능)
-    processStudent(matched[0]);
+    setScreen({ kind: 'error', message: `PIN ${p} — 일치하는 회원/관리자가 없습니다.` });
+    setPin('');
+    window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
 
+  function recordIdOf(p: Person) { return p.kind === 'admin' ? `admin_${p.data.id}` : p.data.id; }
   function doExit() {
     if (screen.kind !== 'pickAction') return;
-    att.exit(screen.student.id, 'fingerprint');
-    setScreen({ kind: 'done', student: screen.student, action: '퇴실' });
+    att.exit(recordIdOf(screen.person), 'fingerprint');
+    setScreen({ kind: 'done', person: screen.person, action: '퇴실' });
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
   function doTempOut() {
     if (screen.kind !== 'pickAction') return;
-    att.leaveTemp(screen.student.id, 'fingerprint');
-    setScreen({ kind: 'done', student: screen.student, action: '외출' });
+    att.leaveTemp(recordIdOf(screen.person), 'fingerprint');
+    setScreen({ kind: 'done', person: screen.person, action: '외출' });
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
   function cancel() {
@@ -193,10 +206,10 @@ export function KioskPage() {
           <IdleScreen pin={pin} onKey={pressKey} agentConnected={agentConnected} />
         )}
         {screen.kind === 'pickAction' && (
-          <PickActionScreen student={screen.student} onExit={doExit} onTemp={doTempOut} onCancel={cancel} />
+          <PickActionScreen person={screen.person} onExit={doExit} onTemp={doTempOut} onCancel={cancel} />
         )}
         {screen.kind === 'done' && (
-          <DoneScreen student={screen.student} action={screen.action} />
+          <DoneScreen person={screen.person} action={screen.action} />
         )}
         {screen.kind === 'error' && (
           <ErrorScreen message={screen.message} onClose={() => setScreen({ kind: 'idle' })} />
@@ -260,8 +273,8 @@ function IdleScreen({ pin, onKey, agentConnected }: { pin: string; onKey: (k: st
   );
 }
 
-function PickActionScreen({ student, onExit, onTemp, onCancel }: {
-  student: LocalStudent;
+function PickActionScreen({ person, onExit, onTemp, onCancel }: {
+  person: Person;
   onExit: () => void;
   onTemp: () => void;
   onCancel: () => void;
@@ -269,8 +282,8 @@ function PickActionScreen({ student, onExit, onTemp, onCancel }: {
   return (
     <div className="flex flex-col items-center gap-8">
       <div className="text-center">
-        <div className="text-sm text-slate-400">현재 입실 중</div>
-        <div className="mt-1 text-5xl font-bold">{student.name}</div>
+        <div className="text-sm text-slate-400">현재 입실 중{person.kind === 'admin' && ' (관리자)'}</div>
+        <div className="mt-1 text-5xl font-bold">{nameOf(person)}</div>
       </div>
       <p className="text-xl text-slate-300">어떻게 하시겠습니까?</p>
       <div className="flex gap-4">
@@ -290,7 +303,7 @@ function PickActionScreen({ student, onExit, onTemp, onCancel }: {
   );
 }
 
-function DoneScreen({ student, action }: { student: LocalStudent; action: '입실' | '퇴실' | '외출' | '복귀' }) {
+function DoneScreen({ person, action }: { person: Person; action: '입실' | '퇴실' | '외출' | '복귀' }) {
   const tone =
     action === '입실' || action === '복귀' ? 'text-emerald-400'
     : action === '외출' ? 'text-amber-400'
@@ -299,7 +312,9 @@ function DoneScreen({ student, action }: { student: LocalStudent; action: '입�
   return (
     <div className="flex flex-col items-center gap-6">
       <div className="text-7xl">{emoji}</div>
-      <div className="text-4xl font-bold text-white">{student.name}</div>
+      <div className="text-4xl font-bold text-white">
+        {nameOf(person)}{person.kind === 'admin' && <span className="ml-2 text-base text-slate-400">관리자</span>}
+      </div>
       <div className={`text-3xl font-bold ${tone}`}>{action} 처리되었습니다</div>
       <div className="text-sm text-slate-400">
         {new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}

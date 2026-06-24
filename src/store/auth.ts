@@ -14,6 +14,11 @@ export interface Account {
   name: string;
   temp?: boolean;       // 초기 임시 계정 여부
   createdAt: number;
+
+  // 키오스크 출입용 (관리자도 출퇴근 기록 가능)
+  kioskPin?: string;            // 4자리 PIN
+  fingerprintId?: string;       // BioStar 사용자 ID
+  enableKioskAccess?: boolean;  // 키오스크 출입 허용 (기본 true)
 }
 
 // 초기 임시 계정: admin / admin1234!
@@ -53,6 +58,7 @@ interface State {
   createAdmin: (p: { username: string; password: string; name: string }) => Promise<Result>;
   changePassword: (id: string, newPassword: string) => Promise<Result>;
   removeAccount: (id: string) => Result;
+  updateAccount: (id: string, patch: Partial<Account>) => void;
 
   current: () => Account | null;
   hasOnlyTemp: () => boolean;
@@ -110,6 +116,12 @@ export const useAuth = create<State>()(
           accounts: get().accounts.map((a) => (a.id === id ? { ...a, passwordHash } : a)),
         });
         return { ok: true };
+      },
+
+      updateAccount(id, patch) {
+        set({
+          accounts: get().accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)),
+        });
       },
 
       removeAccount(id) {

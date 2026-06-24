@@ -49,9 +49,24 @@ export interface EnrollResult {
   error?: string;
 }
 
-export async function enrollFingerprint(externalUserId: string, displayName: string): Promise<EnrollResult> {
+export async function listDevices(): Promise<{ id: string; name: string; status?: string }[]> {
   try {
     const ax = await init();
+    const res = await ax.post('/api/devices/search', {
+      Query: { offset: 0, limit: 50, orders: [{ column: 'name', descending: false }] },
+    });
+    const rows: Array<{ id: string; name: string; status?: { id?: string } }> = res.data?.records ?? [];
+    return rows.map((r) => ({ id: String(r.id), name: r.name ?? r.id, status: r.status?.id }));
+  } catch (e) {
+    console.warn('[biostar] listDevices error:', e);
+    return [];
+  }
+}
+
+export async function enrollFingerprint(externalUserId: string, displayName: string, deviceIdOverride?: string): Promise<EnrollResult> {
+  try {
+    const ax = await init();
+    const deviceId = deviceIdOverride || config.biostar.deviceId;
 
     // 1) 사용자 생성 (이미 있으면 무시)
     let userId = externalUserId;
@@ -68,8 +83,8 @@ export async function enrollFingerprint(externalUserId: string, displayName: str
     }
 
     // 2) 디바이스에 지문 스캔 요청
-    if (!config.biostar.deviceId) throw new Error('BIOSTAR_DEVICE_ID 미설정');
-    const scan = await ax.post(`/api/devices/${config.biostar.deviceId}/scan_fingerprint`, {
+    if (!deviceId) throw new Error('지문 등록기 device ID 미설정');
+    const scan = await ax.post(`/api/devices/${deviceId}/scan_fingerprint`, {
       ScanData: { quality: 50, template_format: 'SUPREMA' },
     });
     const templates: string[] = (scan.data?.Templates ?? []).map((t: { data: string }) => t.data);

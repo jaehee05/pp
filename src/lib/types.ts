@@ -85,6 +85,7 @@ export interface Plan {
   price: number;                // 합계금액 (저장 시 자동 계산)
 
   kind?: string;                // 회원 구분 (일반/학생/성인 등)
+  vendor?: 'main' | 'sub';      // 결제 사업자 (메인=합격공간 독서실 / 서브=합격공간 진학지도교습소). 기본 main
   discountPolicy?: string;      // 할인정책 라벨 (예: "분두 1과목 할인(5%)")
   includesLocker?: boolean;     // 사물함 포함 여부
 

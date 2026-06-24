@@ -13,7 +13,7 @@ export type DeviceEvent =
 export type AgentRequest =
   | { id: string; cmd: 'enroll_fingerprint'; studentId: string }
   | { id: string; cmd: 'identify_fingerprint' }
-  | { id: string; cmd: 'card_pay'; amount: number; installment?: number; orderId: string }
+  | { id: string; cmd: 'card_pay'; amount: number; installment?: number; orderId: string; merchant?: 'main' | 'sub' }
   | { id: string; cmd: 'card_cancel'; approvalNo: string; amount: number };
 
 type Listener = (e: DeviceEvent) => void;

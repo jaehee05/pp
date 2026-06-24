@@ -198,7 +198,17 @@ export function OpsMember() {
               if (e.type !== 'card_payment_result') return;
               off(); resolve(e);
             });
-            deviceAgent.send({ id: `pay_${Date.now()}_${i}`, cmd: 'card_pay', amount: p.amount, orderId: `ord_${student.id}_${i}` });
+            // 주문의 첫 이용권 사업자로 결제 라우팅. 다른 사업자 섞여 있으면 추가 작업 필요.
+            const firstPlanItem = order.find((it) => it.kind === 'plan');
+            const firstPlan = firstPlanItem ? plans.find((pl) => pl.id === firstPlanItem.planId) : undefined;
+            const merchant: 'main' | 'sub' = firstPlan?.vendor === 'sub' ? 'sub' : 'main';
+            deviceAgent.send({
+              id: `pay_${Date.now()}_${i}`,
+              cmd: 'card_pay',
+              amount: p.amount,
+              orderId: `ord_${student.id}_${i}`,
+              merchant,
+            });
           });
           if (!result.ok) {
             setPayStatus(`결제 실패: ${result.error ?? '카드 승인 거절'}`);

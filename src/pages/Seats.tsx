@@ -11,6 +11,7 @@ import { usePlans } from '../store/plans';
 import { ddayLabel, ddayOf, expiryShort } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
+import { liveAppState } from '../lib/firestoreSync';
 
 type EditorMode = 'view' | 'edit';
 
@@ -102,6 +103,25 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const [typeSeatId, setTypeSeatId] = useState<string | null>(null);
 
   const [hydrated, setHydrated] = useState(false);
+
+  // 실시간 구독: 다른 기기/탭(키오스크 등)에서 좌석 상태 변경 시 즉시 반영.
+  // 드래그/리사이즈 중에는 본인 입력 보호 위해 스킵.
+  useEffect(() => {
+    return liveAppState(STORE_KEY, (json) => {
+      if (dragRef.current || resizeRef.current) return;
+      try {
+        const v = JSON.parse(json) as Partial<SavedLayout>;
+        if (v.seats) setSeats(v.seats);
+        if (v.width != null) setWidth(v.width);
+        if (v.height != null) setHeight(v.height);
+        if (v.snap != null) setSnap(v.snap);
+        if (v.offsetX != null) setOffsetX(v.offsetX);
+        if (v.offsetY != null) setOffsetY(v.offsetY);
+        if (v.offsetZ != null) setOffsetZ(v.offsetZ);
+        if (v.autoLabelN != null) setAutoLabelN(v.autoLabelN);
+      } catch { /* */ }
+    });
+  }, []);
 
   // 마운트 시 Firestore(원격)에서 배치도를 받아 반영. 다른 기기/도메인에서 저장한
   // 좌석도 여기로 동기화된다. 원격 로드 전엔 저장을 막아 빈 데이터로 덮어쓰지 않는다.

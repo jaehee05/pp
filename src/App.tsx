@@ -18,8 +18,10 @@ import { KioskPage } from './pages/Kiosk';
 import { LoginPage } from './pages/Login';
 import { AccountPage } from './pages/admin/Account';
 import { RequireAuth } from './components/AuthGate';
+import { useRealtimeStores } from './lib/realtime';
 
 export default function App() {
+  useRealtimeStores();
   return (
     <BrowserRouter>
       <Routes>

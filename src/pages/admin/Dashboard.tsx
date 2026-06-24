@@ -36,16 +36,16 @@ export function Dashboard() {
             <h3 className="font-semibold">매출 현황</h3>
             <span className="text-xs text-slate-400">오늘 / 7일 / 1개월 / 3개월</span>
           </div>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               { l: '오늘', v: todayAmt, b: 'bg-brand-600 text-white' },
               { l: '7일', v: weekAmt, b: 'bg-brand-100 text-brand-700' },
               { l: '1개월', v: monthAmt, b: 'bg-slate-100 text-slate-700' },
               { l: '3개월', v: qAmt, b: 'bg-slate-100 text-slate-700' },
             ].map((it) => (
-              <div key={it.l} className={`rounded-lg ${it.b} p-4 text-center`}>
+              <div key={it.l} className={`rounded-lg ${it.b} p-3 text-center sm:p-4`}>
                 <div className="text-xs opacity-80">{it.l}</div>
-                <div className="mt-2 text-lg font-bold">{fmtMoney(it.v)}</div>
+                <div className="mt-1 truncate text-sm font-bold sm:mt-2 sm:text-lg">{fmtMoney(it.v)}</div>
               </div>
             ))}
           </div>
@@ -69,7 +69,7 @@ export function Dashboard() {
         {/* 좌석/룸 이용 현황 */}
         <div className="card p-5 lg:col-span-2">
           <h3 className="mb-4 font-semibold">좌석/룸 이용 현황</h3>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
               { l: '전체 좌석', v: inCount, sub: `${Math.max(0, total - inCount)}석 잔여` },
               { l: '고정석', v: inCount, sub: `${Math.max(0, total - inCount)}석 잔여` },

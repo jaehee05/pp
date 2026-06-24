@@ -228,25 +228,29 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     }
   }
 
-  function confirmAssign(data: { studentId: string; planId: string; startAt: number; durationDays?: number }) {
+  function confirmAssign(data: { studentId: string; useExisting: boolean; planId?: string; startAt?: number; durationDays?: number }) {
     const seat = seats.find((s) => s.id === assignSeatId);
-    const plan = plans.find((p) => p.id === data.planId);
-    if (!seat || !plan) return;
-    const endAt = data.durationDays ? data.startAt + data.durationDays * 86400000 : undefined;
-    addSubscription({
-      studentId: data.studentId,
-      planId: plan.id,
-      planSnapshot: {
-        name: plan.name, type: plan.type,
-        durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
-        price: plan.price,
-      },
-      startAt: data.startAt,
-      endAt,
-      hoursRemaining: plan.hours,
-      countsRemaining: plan.counts,
-      status: 'active',
-    });
+    if (!seat) return;
+    // 신규 구매면 Subscription 생성, 기존 사용이면 스킵 (좌석 배정만)
+    if (!data.useExisting) {
+      const plan = plans.find((p) => p.id === data.planId);
+      if (!plan || !data.startAt) return;
+      const endAt = data.durationDays ? data.startAt + data.durationDays * 86400000 : undefined;
+      addSubscription({
+        studentId: data.studentId,
+        planId: plan.id,
+        planSnapshot: {
+          name: plan.name, type: plan.type,
+          durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+          price: plan.price,
+        },
+        startAt: data.startAt,
+        endAt,
+        hoursRemaining: plan.hours,
+        countsRemaining: plan.counts,
+        status: 'active',
+      });
+    }
     const history = seat.assignmentHistory ?? [];
     setSeats((prev) => prev.map((s) =>
       s.id === seat.id
@@ -717,18 +721,24 @@ function SeatBox({
 
         {/* 본문 */}
         {student ? (
-          <div className="flex flex-1 flex-col justify-between gap-0.5 px-1.5 py-0.5 leading-none">
-            <div className="flex items-center gap-1 whitespace-nowrap text-[9px] text-slate-500">
-              {endAt && (
-                <>
+          <div className="flex flex-1 flex-col justify-between gap-0.5 leading-none">
+            {endAt ? (() => {
+              const d = ddayOf(endAt);
+              const urgent = d <= 3;
+              return (
+                <div className={`flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 text-[9px] ${
+                  urgent
+                    ? 'bg-orange-500 text-white font-semibold'
+                    : d <= 7
+                      ? 'text-rose-500'
+                      : 'text-slate-500'
+                }`}>
                   <span className="font-mono">{expiryShort(endAt)}</span>
-                  <span className={`font-semibold ${ddayOf(endAt) <= 7 ? 'text-rose-500' : 'text-slate-500'}`}>
-                    {ddayLabel(ddayOf(endAt))}
-                  </span>
-                </>
-              )}
-            </div>
-            <div className="flex min-w-0 items-baseline gap-0.5 text-[11px]">
+                  <span className="font-semibold">{ddayLabel(d)}</span>
+                </div>
+              );
+            })() : <div className="px-1.5 py-0.5" />}
+            <div className="flex min-w-0 items-baseline gap-0.5 px-1.5 py-0.5 text-[11px]">
               <span className="truncate font-semibold text-slate-800">{student.name}</span>
               <span className={`shrink-0 text-[10px] leading-none ${
                 student.gender === 'M' ? 'text-sky-500'

@@ -19,9 +19,9 @@ export function OpsLayout() {
       <AppHeader onMenu={() => setNav(true)} />
       <div className="relative flex flex-1 overflow-hidden">
         {/* 좌측 메뉴 백드롭 (모바일) */}
-        {nav && <div className="fixed inset-0 top-14 z-30 bg-black/30 md:hidden" onClick={() => setNav(false)} />}
+        {nav && <div className="fixed inset-0 top-14 z-[60] bg-black/30 md:hidden" onClick={() => setNav(false)} />}
         <aside
-          className={`fixed inset-y-0 left-0 top-14 z-40 flex w-20 shrink-0 transform flex-col items-stretch border-r border-slate-200 bg-white py-2 transition-transform duration-200 md:static md:top-0 md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 top-14 z-[70] flex w-20 shrink-0 transform flex-col items-stretch border-r border-slate-200 bg-white py-2 transition-transform duration-200 md:static md:top-0 md:translate-x-0 md:z-auto ${
             nav ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -47,9 +47,9 @@ export function OpsLayout() {
         </main>
 
         {/* 우측 회원 패널: lg 이상 고정, 모바일은 드로어 */}
-        {members && <div className="fixed inset-0 top-14 z-30 bg-black/30 lg:hidden" onClick={() => setMembers(false)} />}
+        {members && <div className="fixed inset-0 top-14 z-[60] bg-black/30 lg:hidden" onClick={() => setMembers(false)} />}
         <div
-          className={`fixed inset-y-0 right-0 top-14 z-40 flex transform transition-transform duration-200 lg:static lg:top-0 lg:translate-x-0 ${
+          className={`fixed inset-y-0 right-0 top-14 z-[70] flex transform transition-transform duration-200 lg:static lg:top-0 lg:translate-x-0 lg:z-auto ${
             members ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'
           }`}
         >

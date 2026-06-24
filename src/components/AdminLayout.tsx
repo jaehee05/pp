@@ -53,10 +53,10 @@ export function AdminLayout() {
       <div className="relative flex flex-1 overflow-hidden">
         {/* 모바일 백드롭 */}
         {drawer && (
-          <div className="fixed inset-0 top-14 z-30 bg-black/30 md:hidden" onClick={close} />
+          <div className="fixed inset-0 top-14 z-[60] bg-black/30 md:hidden" onClick={close} />
         )}
         <aside
-          className={`fixed inset-y-0 left-0 top-14 z-40 flex w-60 shrink-0 transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 md:static md:top-0 md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 top-14 z-[70] flex w-60 shrink-0 transform flex-col border-r border-slate-200 bg-white transition-transform duration-200 md:static md:top-0 md:translate-x-0 md:z-auto ${
             drawer ? 'translate-x-0' : '-translate-x-full'
           }`}
         >

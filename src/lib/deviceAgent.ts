@@ -40,18 +40,27 @@ class DeviceAgent {
   connect() {
     if (this.mockMode) return;
     try {
+      console.log('[deviceAgent] connecting to', this.url);
       this.ws = new WebSocket(this.url);
-      this.ws.onopen = () => this.emit({ type: 'connected' });
+      this.ws.onopen = () => {
+        console.log('[deviceAgent] connected');
+        this.emit({ type: 'connected' });
+      };
       this.ws.onclose = () => {
+        console.warn('[deviceAgent] disconnected, will retry in 3s');
         this.emit({ type: 'disconnected' });
         this.scheduleReconnect();
       };
-      this.ws.onerror = () => this.ws?.close();
+      this.ws.onerror = (e) => {
+        console.error('[deviceAgent] ws error', e);
+        this.ws?.close();
+      };
       this.ws.onmessage = (ev) => {
         try { this.emit(JSON.parse(ev.data) as DeviceEvent); }
         catch { /* ignore */ }
       };
-    } catch {
+    } catch (e) {
+      console.error('[deviceAgent] connect threw', e);
       this.scheduleReconnect();
     }
   }
@@ -128,7 +137,9 @@ export const deviceAgent = new DeviceAgent();
 // 환경변수로 모의/실제 전환
 // 기본값: 실제 Bridge 연결 시도.
 // 명시적으로 mock 강제하려면 .env 에 VITE_DEVICE_AGENT=mock
+console.log('[deviceAgent] init, VITE_DEVICE_AGENT =', import.meta.env.VITE_DEVICE_AGENT);
 if (import.meta.env.VITE_DEVICE_AGENT === 'mock') {
+  console.log('[deviceAgent] mock mode (env)');
   deviceAgent.enableMock();
 } else {
   deviceAgent.connect();

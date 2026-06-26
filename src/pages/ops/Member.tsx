@@ -588,10 +588,6 @@ export function OpsMember() {
               (1과목 / 2과목이상)를 먼저 지정해야 노출됩니다.
               현재 학생: <b>{student?.discountTier ?? '없음'}</b>
             </span>
-            <span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-700">
-              📅 시즌 제한 이용권은 <b>이용권 시작 예정월</b> 기준으로 필터링됨.
-              시작 예정: <b>{new Date(projectedStartTs).toISOString().slice(0, 10)} ({startMonth}월)</b>
-            </span>
           </div>
           <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">
             <Field label="좌석타입" col={3}>

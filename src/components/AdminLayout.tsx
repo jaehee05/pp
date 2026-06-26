@@ -35,6 +35,7 @@ const NAV: NavItem[] = [
       { to: '/admin/layouts/seats', label: '좌석 배치' },
     ],
   },
+  { to: '/admin/help', label: '사용 설명서', icon: '📘' },
 ];
 
 export function AdminLayout() {

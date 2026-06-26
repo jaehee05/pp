@@ -10,6 +10,7 @@ import { MessagesHistory } from './pages/admin/MessagesHistory';
 import { MessagesBalance } from './pages/admin/MessagesBalance';
 import { PpurioSettingsPage } from './pages/admin/PpurioSettings';
 import { BulkImportPage } from './pages/admin/BulkImport';
+import { HelpPage } from './pages/admin/Help';
 import { SeatsPage } from './pages/Seats';
 import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="messages/balance" element={<MessagesBalance />} />
           <Route path="messages/ppurio" element={<PpurioSettingsPage />} />
           <Route path="bulk-import" element={<BulkImportPage />} />
+          <Route path="help" element={<HelpPage />} />
           <Route path="layouts/seats" element={<SeatsPage />} />
         </Route>
 

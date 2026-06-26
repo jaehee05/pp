@@ -6,6 +6,7 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { fmtPhone } from '../../lib/format';
 import { currentSubOf } from '../../lib/sub';
+import { useSeats, seatOfStudent } from '../../lib/useSeats';
 
 type MemberState = 'all' | 'normal' | 'restricted' | 'risk' | 'left';
 type MemberKind = 'all' | 'student' | 'adult' | 'unknown';
@@ -44,6 +45,7 @@ const DEFAULT: Filters = {
 export function MembersAdmin() {
   const students = useStudents((s) => s.list);
   const att = useAttendance((s) => s.state);
+  const seats = useSeats();
   const subs = usePlans((s) => s.subs);
   const pays = usePlans((s) => s.pays);
   const nav = useNavigate();
@@ -172,7 +174,10 @@ export function MembersAdmin() {
                     <td>{useStateLabel}</td>
                     <td>{sub ? '고정석' : '-'}</td>
                     <td>{sub ? '기간권' : '-'}</td>
-                    <td>{/* 좌석 번호: 미구현 */}-</td>
+                    <td>{(() => {
+                      const seat = seatOfStudent(seats, s.id);
+                      return seat ? <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-semibold text-slate-700">{seat.label}</span> : '-';
+                    })()}</td>
                     <td>{s.lockerId ?? '-'}</td>
                     <td className="text-xs text-slate-600">{sub ? new Date(sub.startAt).toISOString().slice(0, 10) : '-'}</td>
                     <td className="text-xs text-slate-600">{endAt ? new Date(endAt).toISOString().slice(0, 10) : '-'}</td>

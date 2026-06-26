@@ -26,7 +26,28 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
   const all = usePlans((s) => s.plans);
   const upsert = usePlans((s) => s.upsertPlan);
   const remove = usePlans((s) => s.removePlan);
-  const move = usePlans((s) => s.movePlan);
+  const reorder = usePlans((s) => s.reorderPlan);
+
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
+  const [overPos, setOverPos] = useState<'before' | 'after'>('before');
+
+  function onDragStart(id: string) { setDragId(id); }
+  function onDragOver(e: React.DragEvent, id: string) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (id === dragId) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const middle = rect.top + rect.height / 2;
+    setOverId(id);
+    setOverPos(e.clientY < middle ? 'before' : 'after');
+  }
+  function onDragEnd() { setDragId(null); setOverId(null); }
+  function onDrop(targetId: string) {
+    if (!dragId || dragId === targetId) { onDragEnd(); return; }
+    reorder(dragId, targetId, overPos);
+    onDragEnd();
+  }
 
   const list = useMemo(() => all.filter((p) => p.category === category), [all, category]);
   const [editing, setEditing] = useState<Plan | null>(null);
@@ -86,9 +107,28 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
               {list.map((p, i) => {
                 const hidden = !!p.hidden;
                 const rowCls = hidden ? 'text-slate-400 line-through' : '';
+                const isDragging = dragId === p.id;
+                const showTopLine = overId === p.id && overPos === 'before' && dragId !== p.id;
+                const showBottomLine = overId === p.id && overPos === 'after' && dragId !== p.id;
                 return (
-                  <tr key={p.id} className="border-t border-slate-100 hover:bg-slate-50">
-                    <td className={`px-3 py-2 text-center text-slate-500 ${rowCls}`}>{i + 1}</td>
+                  <tr
+                    key={p.id}
+                    draggable
+                    onDragStart={() => onDragStart(p.id)}
+                    onDragOver={(e) => onDragOver(e, p.id)}
+                    onDragLeave={() => { if (overId === p.id) setOverId(null); }}
+                    onDrop={() => onDrop(p.id)}
+                    onDragEnd={onDragEnd}
+                    className={`border-t border-slate-100 hover:bg-slate-50 ${
+                      isDragging ? 'opacity-40' : ''
+                    } ${showTopLine ? 'shadow-[inset_0_3px_0_0_#3b82f6]' : ''} ${
+                      showBottomLine ? 'shadow-[inset_0_-3px_0_0_#3b82f6]' : ''
+                    }`}
+                    style={{ cursor: 'grab' }}
+                  >
+                    <td className={`px-3 py-2 text-center text-slate-500 ${rowCls}`}>
+                      <span className="mr-1 cursor-grab select-none text-slate-300">⋮⋮</span>{i + 1}
+                    </td>
                     <td className={`px-3 py-2 ${rowCls}`}>{periodLabel(p)}</td>
                     <td className={`px-3 py-2 ${rowCls}`}>{p.kind ?? '일반'}</td>
                     {category === 'seat' && (
@@ -112,12 +152,6 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
                     <td className={`px-3 py-2 ${rowCls}`}>{p.discountPolicy ?? ''}</td>
                     <td className={`px-3 py-2 text-center ${rowCls}`}>{p.includesLocker ? '포함' : '-'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
-                      <span className="mr-2 inline-flex overflow-hidden rounded-md ring-1 ring-slate-300">
-                        <button title="위로" onClick={() => move(p.id, -1)} disabled={i === 0}
-                          className="bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">▲</button>
-                        <button title="아래로" onClick={() => move(p.id, 1)} disabled={i === list.length - 1}
-                          className="border-l border-slate-300 bg-white px-2 py-1 text-xs text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:text-slate-300">▼</button>
-                      </span>
                       <button
                         onClick={() => toggleHide(p)}
                         className={`mr-1 rounded-md px-2 py-1 text-xs ${

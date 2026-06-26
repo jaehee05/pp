@@ -14,6 +14,7 @@ interface State {
   upsertPlan: (p: LocalPlan) => void;
   removePlan: (id: string) => void;
   movePlan: (id: string, delta: number) => void;
+  reorderPlan: (id: string, targetId: string, position: 'before' | 'after') => void;
   addPayment: (p: Omit<LocalPay, 'id' | 'createdAt'>) => string;
   setPaymentApproved: (id: string, fields: Partial<LocalPay>) => void;
   addSubscription: (s: Omit<LocalSub, 'id'>) => string;
@@ -58,6 +59,23 @@ export const usePlans = create<State>()(
         const arr = [...st.plans];
         arr.splice(i, 1);
         arr.splice(j, 0, plan);
+        return { plans: arr };
+      }),
+      reorderPlan: (id, targetId, position) => set((st) => {
+        if (id === targetId) return st;
+        const fromIdx = st.plans.findIndex((p) => p.id === id);
+        const toIdx = st.plans.findIndex((p) => p.id === targetId);
+        if (fromIdx < 0 || toIdx < 0) return st;
+        // 같은 카테고리 안에서만 이동
+        if (st.plans[fromIdx].category !== st.plans[toIdx].category) return st;
+        const moved = st.plans[fromIdx];
+        const arr = [...st.plans];
+        arr.splice(fromIdx, 1);
+        // splice 후 인덱스 보정
+        let insertAt = arr.findIndex((p) => p.id === targetId);
+        if (insertAt < 0) return st;
+        if (position === 'after') insertAt += 1;
+        arr.splice(insertAt, 0, moved);
         return { plans: arr };
       }),
       addPayment: (p) => {

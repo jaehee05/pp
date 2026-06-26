@@ -8,7 +8,7 @@ import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { chargeCard } from '../../lib/payment';
 import { fmtDateTime, fmtMoney } from '../../lib/format';
-import { currentSubOf, lastActiveEndOf } from '../../lib/sub';
+import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
 
 type LogTab = 'member' | 'use' | 'pay';
 
@@ -265,12 +265,12 @@ export function OpsMember() {
         });
         setPaymentApproved(payId, { approvedAt: Date.now() });
 
-        // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 그 직후부터 시작
+        // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 기존 종료일 다음날 00:00 부터 시작
         const futureEnds = subs
           .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
           .map((s) => s.endAt as number);
         const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
-        const actualStartAt = latestEnd ?? item.startAt;
+        const actualStartAt = latestEnd ? nextDayStart(latestEnd) : item.startAt;
         const endAt = item.durationDays ? actualStartAt + item.durationDays * 86400000 : undefined;
         addSubscription({
           studentId: student.id, planId: plan.id,

@@ -43,6 +43,14 @@ export function upcomingSubsOf<T extends SubLike>(subs: T[], studentId: string, 
     .sort((a, b) => a.startAt - b.startAt);
 }
 
+// 주어진 시각의 다음 날 00:00 (자정) 반환. 갱신 이용권 시작일 계산용.
+export function nextDayStart(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
 // 활성 이용권 중 가장 늦은 종료 시각 (현재 + 예정 모두 포함). D-day 계산용.
 export function lastActiveEndOf<T extends SubLike>(subs: T[], studentId: string): number | null {
   const ends = subs

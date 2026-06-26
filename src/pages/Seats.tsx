@@ -8,7 +8,7 @@ import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
-import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf } from '../lib/sub';
+import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf, nextDayStart } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { liveAppState } from '../lib/firestoreSync';
@@ -255,12 +255,12 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     if (!data.useExisting) {
       const plan = plans.find((p) => p.id === data.planId);
       if (!plan || !data.startAt) return;
-      // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면 그 직후부터 시작
+      // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 기존 종료일 다음날 00:00 부터 시작
       const futureEnds = subs
         .filter((s) => s.studentId === data.studentId && s.status === 'active' && s.endAt && s.endAt > Date.now())
         .map((s) => s.endAt as number);
       const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
-      const actualStartAt = latestEnd ?? data.startAt;
+      const actualStartAt = latestEnd ? nextDayStart(latestEnd) : data.startAt;
       const endAt = data.durationDays ? actualStartAt + data.durationDays * 86400000 : undefined;
       addSubscription({
         studentId: data.studentId,

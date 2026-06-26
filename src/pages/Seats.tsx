@@ -261,7 +261,8 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
         .map((s) => s.endAt as number);
       const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
       const actualStartAt = latestEnd ? nextDayStart(latestEnd) : data.startAt;
-      const endAt = data.durationDays ? actualStartAt + data.durationDays * 86400000 : undefined;
+      // 기간권 종료일 = 시작일 + (일수-1) (포함 기준). 예: 6/1 + 30일 = 6/30.
+      const endAt = data.durationDays ? actualStartAt + (data.durationDays - 1) * 86400000 : undefined;
       addSubscription({
         studentId: data.studentId,
         planId: plan.id,

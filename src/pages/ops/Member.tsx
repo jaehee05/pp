@@ -7,7 +7,7 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { chargeCard } from '../../lib/payment';
-import { fmtDateTime, fmtMoney } from '../../lib/format';
+import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
 
 type LogTab = 'member' | 'use' | 'pay';
@@ -65,7 +65,7 @@ export function OpsMember() {
   // 이용권 선택
   const [planSeatType, setPlanSeatType] = useState<'' | 'fixed' | 'free'>('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
-  const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState<string>(() => toLocalISODate(Date.now()));
   // 사용자가 직접 startDate 를 손댔는지 추적. 손댄 적 있으면 자동 동기화 안 함.
   const [startDateTouched, setStartDateTouched] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -135,7 +135,7 @@ export function OpsMember() {
   // 이전 이용권 있으면 만료일 다음날, 없으면 오늘.
   useEffect(() => {
     if (startDateTouched) return;
-    const next = new Date(projectedStartTs).toISOString().slice(0, 10);
+    const next = toLocalISODate(projectedStartTs);
     setStartDate((prev) => (prev === next ? prev : next));
   }, [projectedStartTs, startDateTouched]);
   const availablePlans = useMemo(() => plans.filter((p) => {
@@ -164,7 +164,7 @@ export function OpsMember() {
       planId: plan.id, kind: 'plan',
       name: plan.name,
       amount: plan.price,
-      startAt: new Date(startDate).getTime(),
+      startAt: fromLocalISODate(startDate),
       durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
     }]);
     setSelectedPlanId('');
@@ -299,7 +299,9 @@ export function OpsMember() {
           .map((s) => s.endAt as number);
         const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
         const actualStartAt = latestEnd ? nextDayStart(latestEnd) : item.startAt;
-        const endAt = item.durationDays ? actualStartAt + item.durationDays * 86400000 : undefined;
+        // 기간권 종료일 = 시작일 + (일수-1) (포함 기준).
+        // 예: 6/1 시작 + 30일 = 6/30 만료 (다음권은 7/1 부터).
+        const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
         addSubscription({
           studentId: student.id, planId: plan.id,
           planSnapshot: {
@@ -481,8 +483,8 @@ export function OpsMember() {
             <div className="grid grid-cols-6 gap-y-3 text-sm">
               <Field2 label="이용권">{sub.planSnapshot.name}</Field2>
               <Field2 label="상태"><span className="text-emerald-600 font-semibold">이용중</span></Field2>
-              <Field2 label="시작일">{new Date(sub.startAt).toISOString().slice(0, 10)}</Field2>
-              <Field2 label="종료일">{sub.endAt ? new Date(sub.endAt).toISOString().slice(0, 10) : '-'}</Field2>
+              <Field2 label="시작일">{toLocalISODate(sub.startAt)}</Field2>
+              <Field2 label="종료일">{sub.endAt ? toLocalISODate(sub.endAt) : '-'}</Field2>
               <Field2 label="이용기간">{sub.planSnapshot.durationDays ? `${sub.planSnapshot.durationDays}일` : '-'}</Field2>
               <Field2 label="잔여기간">
                 {(() => {
@@ -501,8 +503,8 @@ export function OpsMember() {
                 <div key={u.id} className="flex items-center justify-between rounded-md bg-amber-50 px-3 py-2 text-xs">
                   <span className="font-medium text-amber-900">{u.planSnapshot.name}</span>
                   <span className="text-amber-700">
-                    {new Date(u.startAt).toISOString().slice(0, 10)}
-                    {u.endAt ? ` ~ ${new Date(u.endAt).toISOString().slice(0, 10)}` : ''}
+                    {toLocalISODate(u.startAt)}
+                    {u.endAt ? ` ~ ${toLocalISODate(u.endAt)}` : ''}
                   </span>
                 </div>
               ))}
@@ -666,7 +668,7 @@ export function OpsMember() {
                       {it.kind === 'plan' ? '이용권' : it.kind === 'discount' ? '할인' : '기타'}
                     </td>
                     <td className="px-2 py-2">{it.name}</td>
-                    <td className="px-2 py-2 text-xs text-slate-600">{it.kind === 'plan' ? new Date(it.startAt).toISOString().slice(0,10) : '-'}</td>
+                    <td className="px-2 py-2 text-xs text-slate-600">{it.kind === 'plan' ? toLocalISODate(it.startAt) : '-'}</td>
                     <td className={`px-2 py-2 text-right font-mono ${it.amount < 0 ? 'text-rose-600' : ''}`}>
                       {it.amount.toLocaleString()}원
                     </td>
@@ -786,13 +788,13 @@ export function OpsMember() {
                   </td>
                   <td className="px-2 py-2 text-center text-xs">
                     <input className="rounded border border-slate-200 px-1 py-0.5 text-xs" type="date"
-                      value={new Date(s.startAt).toISOString().slice(0, 10)}
-                      onChange={(e) => updateSubscription(s.id, { startAt: new Date(e.target.value).getTime() })} />
+                      value={toLocalISODate(s.startAt)}
+                      onChange={(e) => updateSubscription(s.id, { startAt: fromLocalISODate(e.target.value) })} />
                   </td>
                   <td className="px-2 py-2 text-center text-xs">
                     <input className="rounded border border-slate-200 px-1 py-0.5 text-xs" type="date"
-                      value={s.endAt ? new Date(s.endAt).toISOString().slice(0, 10) : ''}
-                      onChange={(e) => updateSubscription(s.id, { endAt: e.target.value ? new Date(e.target.value).getTime() : undefined })} />
+                      value={s.endAt ? toLocalISODate(s.endAt) : ''}
+                      onChange={(e) => updateSubscription(s.id, { endAt: e.target.value ? fromLocalISODate(e.target.value) : undefined })} />
                   </td>
                   <td className="px-2 py-2 text-right">
                     <input className="w-24 rounded border border-slate-200 px-1 py-0.5 text-right font-mono text-xs" type="number" step={100}

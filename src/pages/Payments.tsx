@@ -58,7 +58,8 @@ export function PaymentsPage() {
         terminalTxId: e.txId,
       });
       const start = Date.now();
-      const end = plan.durationDays ? start + plan.durationDays * 86400000 : undefined;
+      // 기간권 종료일 = 시작일 + (일수-1) (포함 기준).
+      const end = plan.durationDays ? start + (plan.durationDays - 1) * 86400000 : undefined;
       addSubscription({
         studentId: student.id,
         planId: plan.id,

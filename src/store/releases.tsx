@@ -21,6 +21,21 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_008',
+    title: 'v1.0.8 — 기간권 만료일/시작일 보정 + 시간대 버그 수정',
+    date: '2026-06-26',
+    body: `## 버그 수정
+- **기간권 종료일이 1일씩 밀려있던 문제 수정** — 6/1 시작 + 30일 = **6/30 만료** (기존: 7/1).
+  - 다음 이용권 큐잉 시작일도 자연스럽게 만료일 다음날로 정렬 (예: 7/1).
+- **UTC ↔ KST 시간대 차이로 날짜가 하루 밀려 보이던 문제 수정** (\`toISOString\` → \`toLocalISODate\`).
+  - 회원정보 시작일/종료일, 이용권 큐 테이블, 결제 화면, 이용권 편집 모달 모두 적용.
+
+## 내부
+- \`lib/format.ts\` 에 \`toLocalISODate\` / \`fromLocalISODate\` 헬퍼 추가.`,
+    createdAt: Date.parse('2026-06-26'),
+    updatedAt: Date.parse('2026-06-26'),
+  },
+  {
     slug: 'v1_007',
     title: 'v1.0.7 — 시작일 자동 세팅 + 임시 계정 안내 제거',
     date: '2026-06-26',

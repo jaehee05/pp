@@ -281,6 +281,32 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
             onChange={(e) => setV({ ...v, discountPolicy: e.target.value })}
             placeholder="예: 분두 1과목 할인(5%) / 형제 할인 10% / 비원생 정상가(0%)" />
         </label>
+        <div className="col-span-2 rounded-md bg-slate-50 p-3">
+          <div className="mb-1 text-xs font-semibold text-slate-700">노출 대상 할인 등급</div>
+          <p className="mb-2 text-[11px] text-slate-500">
+            체크된 등급의 학생에게만 이용권 선택 시 보임. 아무것도 안 체크하면 <b>전체 학생</b> 에게 노출.
+          </p>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {(['없음', '1과목', '2과목이상'] as const).map((tier) => {
+              const checked = (v.allowedDiscountTiers ?? []).includes(tier);
+              return (
+                <label key={tier} className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-600"
+                    checked={checked}
+                    onChange={(e) => {
+                      const cur = new Set(v.allowedDiscountTiers ?? []);
+                      if (e.target.checked) cur.add(tier); else cur.delete(tier);
+                      setV({ ...v, allowedDiscountTiers: cur.size > 0 ? Array.from(cur) : undefined });
+                    }}
+                  />
+                  {tier}
+                </label>
+              );
+            })}
+          </div>
+        </div>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={!!v.includesLocker}
             onChange={(e) => setV({ ...v, includesLocker: e.target.checked })} />

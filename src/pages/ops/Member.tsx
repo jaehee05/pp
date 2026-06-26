@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { Modal } from '../../components/Modal';
-import { useStudents } from '../../store/students';
+import { useStudents, DISCOUNT_TIERS, type DiscountTier } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
@@ -118,14 +118,20 @@ export function OpsMember() {
   }
   function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
 
-  // 좌석타입 + 숨김 필터 적용된 이용권 후보
+  // 좌석타입 + 숨김 + 할인 등급 필터 적용된 이용권 후보
   const availablePlans = useMemo(() => plans.filter((p) => {
     if (p.category !== 'seat') return false;
     if (!p.active) return false;
     if (!showHidden && p.hidden) return false;
     if (planSeatType && p.seatType !== planSeatType) return false;
+    // 노출 대상 할인 등급 필터: 비어있으면 모두 노출, 지정 시 학생의 등급과 일치해야
+    const allowed = p.allowedDiscountTiers;
+    if (allowed && allowed.length > 0) {
+      const tier = student?.discountTier ?? '없음';
+      if (!allowed.includes(tier)) return false;
+    }
     return true;
-  }), [plans, planSeatType, showHidden]);
+  }), [plans, planSeatType, showHidden, student?.discountTier]);
 
   function addPlanToOrder() {
     if (!selectedPlanId) return alert('이용권을 선택하세요.');
@@ -386,13 +392,15 @@ export function OpsMember() {
                 <option value="adult">성인</option>
               </select>
             </Field>
+            <Field label="할인 대상" col={3}>
+              <select className="input" value={v?.discountTier ?? '없음'} disabled={!editMode}
+                onChange={(e) => setDraftField('discountTier', e.target.value as DiscountTier)}>
+                {DISCOUNT_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </Field>
             <Field label="사물함" col={3}>
               <input className="input" value={v?.lockerId ?? ''} placeholder="없음" readOnly={!editMode}
                 onChange={(e) => setDraftField('lockerId', e.target.value)} />
-            </Field>
-            <Field label="신발장" col={3}>
-              <input className="input" value={v?.shoeId ?? ''} placeholder="없음" readOnly={!editMode}
-                onChange={(e) => setDraftField('shoeId', e.target.value)} />
             </Field>
 
             <Field label="보호자" col={4}>

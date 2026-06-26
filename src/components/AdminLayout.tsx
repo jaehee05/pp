@@ -12,13 +12,6 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/admin/dashboard', label: '대시보드', icon: '◧' },
-  {
-    label: '매출 관리', icon: '📈', children: [
-      { to: '/admin/sales/daily', label: '일별 매출' },
-      { to: '/admin/sales/payments', label: '결제 내역' },
-      { to: '/admin/sales/refunds', label: '환불 내역' },
-    ],
-  },
   { to: '/admin/members', label: '회원 관리', icon: '👤' },
   {
     label: '매장 관리', icon: '🏬', children: [

@@ -1,24 +1,12 @@
-import { useMemo } from 'react';
 import { PageHeader } from '../../components/PageHeader';
 import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
-import { fmtMoney } from '../../lib/format';
 
 export function Dashboard() {
   const students = useStudents((s) => s.list);
   const att = useAttendance();
-  const { pays, subs } = usePlans();
-
-  const today0 = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); }, []);
-  const week0 = today0 - 6 * 86400000;
-  const month0 = today0 - 29 * 86400000;
-  const q0 = today0 - 89 * 86400000;
-
-  const todayAmt = pays.filter((p) => p.createdAt >= today0 && p.status === 'approved').reduce((a, p) => a + p.amount, 0);
-  const weekAmt = pays.filter((p) => p.createdAt >= week0 && p.status === 'approved').reduce((a, p) => a + p.amount, 0);
-  const monthAmt = pays.filter((p) => p.createdAt >= month0 && p.status === 'approved').reduce((a, p) => a + p.amount, 0);
-  const qAmt = pays.filter((p) => p.createdAt >= q0 && p.status === 'approved').reduce((a, p) => a + p.amount, 0);
+  const { subs } = usePlans();
 
   const inCount = Object.values(att.state).filter((s) => s.state === 'in').length;
   const activeSubs = subs.filter((s) => s.status === 'active');
@@ -30,25 +18,10 @@ export function Dashboard() {
     <>
       <PageHeader title="대시보드" desc={`최근 업데이트: ${new Date().toLocaleString('ko-KR')}`} />
       <div className="grid grid-cols-1 gap-4 p-6 lg:grid-cols-3">
-        {/* 매출 현황 */}
+        {/* 매출 현황 — 결제선생 연동 후 활성 예정 */}
         <div className="card p-5 lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="font-semibold">매출 현황</h3>
-            <span className="text-xs text-slate-400">오늘 / 7일 / 1개월 / 3개월</span>
-          </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { l: '오늘', v: todayAmt, b: 'bg-brand-600 text-white' },
-              { l: '7일', v: weekAmt, b: 'bg-brand-100 text-brand-700' },
-              { l: '1개월', v: monthAmt, b: 'bg-slate-100 text-slate-700' },
-              { l: '3개월', v: qAmt, b: 'bg-slate-100 text-slate-700' },
-            ].map((it) => (
-              <div key={it.l} className={`rounded-lg ${it.b} p-3 text-center sm:p-4`}>
-                <div className="text-xs opacity-80">{it.l}</div>
-                <div className="mt-1 truncate text-sm font-bold sm:mt-2 sm:text-lg">{fmtMoney(it.v)}</div>
-              </div>
-            ))}
-          </div>
+          <h3 className="mb-2 font-semibold text-slate-500">매출 현황 (준비 중)</h3>
+          <p className="text-xs text-slate-400">결제선생 API 연동 완료 후 실시간 집계 표시 예정.</p>
         </div>
 
         {/* 출입문 / 공지 placeholder */}

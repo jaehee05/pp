@@ -14,7 +14,11 @@ type LocalStudent = Omit<Student, 'joinedAt' | 'pointsTotal'> & {
   parentMsgReceive?: boolean;   // 학부모 메시지 수신
   lockerId?: string;
   shoeId?: string;
+  discountTier?: DiscountTier;  // 할인 대상 (이용권 노출 필터링용)
 }
+
+export type DiscountTier = '없음' | '1과목' | '2과목이상';
+export const DISCOUNT_TIERS: DiscountTier[] = ['없음', '1과목', '2과목이상'];
 
 interface State {
   list: LocalStudent[];
@@ -63,6 +67,7 @@ export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTo
     memberState: 'normal',
     msgReceive: true,
     parentMsgReceive: true,
+    discountTier: '없음',
     notify: {
       studentEnterExit: true,
       parentEnterExit: true,

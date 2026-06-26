@@ -6,6 +6,7 @@ import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
+import { chargeCard } from '../../lib/payment';
 import { fmtDateTime, fmtMoney } from '../../lib/format';
 import { currentSubOf } from '../../lib/sub';
 
@@ -204,19 +205,14 @@ export function OpsMember() {
   async function callCardPay(amount: number, merchant: 'main' | 'sub', tag: string): Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }> {
     if (!student) return { ok: false, error: 'no student' };
     setPayStatus(`${tag} 카드 결제 ${amount.toLocaleString()}원 — 단말기에 카드를 긁어주세요…`);
-    return new Promise((resolve) => {
-      const off = deviceAgent.on((e) => {
-        if (e.type !== 'card_payment_result') return;
-        off(); resolve(e);
-      });
-      deviceAgent.send({
-        id: `pay_${Date.now()}_${merchant}`,
-        cmd: 'card_pay',
-        amount,
-        orderId: `ord_${student.id}_${merchant}_${Date.now().toString(36)}`,
-        merchant,
-      });
-    });
+    const orderId = `ord_${student.id}_${merchant}_${Date.now().toString(36)}`;
+    const res = await chargeCard({ amount, merchant, orderId, taxFree: true });
+    return {
+      ok: res.ok,
+      approvalNo: res.approvalNo,
+      txId: res.txId,
+      error: res.error,
+    };
   }
 
   async function processPayment() {

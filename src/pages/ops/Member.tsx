@@ -118,7 +118,8 @@ export function OpsMember() {
   }
   function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
 
-  // 좌석타입 + 숨김 + 할인 등급 필터 적용된 이용권 후보
+  // 좌석타입 + 숨김 + 할인 등급 + 노출 월 필터 적용된 이용권 후보
+  const thisMonth = new Date().getMonth() + 1; // 1-12
   const availablePlans = useMemo(() => plans.filter((p) => {
     if (p.category !== 'seat') return false;
     if (!p.active) return false;
@@ -130,8 +131,11 @@ export function OpsMember() {
       const tier = student?.discountTier ?? '없음';
       if (!allowed.includes(tier)) return false;
     }
+    // 월 필터: availableMonths 지정 시 현재 월 포함되어야
+    const months = p.availableMonths;
+    if (months && months.length > 0 && months.length < 12 && !months.includes(thisMonth)) return false;
     return true;
-  }), [plans, planSeatType, showHidden, student?.discountTier]);
+  }), [plans, planSeatType, showHidden, student?.discountTier, thisMonth]);
 
   function addPlanToOrder() {
     if (!selectedPlanId) return alert('이용권을 선택하세요.');

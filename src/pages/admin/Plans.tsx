@@ -148,7 +148,14 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
                       {fmtMoney(p.taxableAmount ?? 0)}
                     </td>
                     <td className={`px-3 py-2 text-right font-mono font-semibold ${rowCls}`}>{fmtMoney(p.price)}</td>
-                    <td className={`px-3 py-2 ${rowCls}`}>{p.description ?? ''}</td>
+                    <td className={`px-3 py-2 ${rowCls}`}>
+                      {p.description ?? ''}
+                      {p.availableMonths && p.availableMonths.length > 0 && p.availableMonths.length < 12 && (
+                        <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+                          📅 {p.availableMonths.join(',')}월
+                        </span>
+                      )}
+                    </td>
                     <td className={`px-3 py-2 ${rowCls}`}>{p.discountPolicy ?? ''}</td>
                     <td className={`px-3 py-2 text-center ${rowCls}`}>{p.includesLocker ? '포함' : '-'}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap">
@@ -302,6 +309,60 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
                     }}
                   />
                   {tier}
+                </label>
+              );
+            })}
+          </div>
+        </div>
+        <div className="col-span-2 rounded-md bg-slate-50 p-3">
+          <div className="mb-1 flex items-center justify-between">
+            <div className="text-xs font-semibold text-slate-700">노출 월 (시즌 제한)</div>
+            <div className="flex gap-1.5 text-[11px]">
+              <button
+                type="button"
+                className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"
+                onClick={() => setV({ ...v, availableMonths: undefined })}
+              >전체</button>
+              <button
+                type="button"
+                className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"
+                onClick={() => setV({ ...v, availableMonths: [7, 8] })}
+              >여름방학 (7,8월)</button>
+              <button
+                type="button"
+                className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"
+                onClick={() => setV({ ...v, availableMonths: [12, 1, 2] })}
+              >겨울방학 (12,1,2월)</button>
+              <button
+                type="button"
+                className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"
+                onClick={() => setV({ ...v, availableMonths: [1,2,3,4,5,6,9,10,11,12] })}
+              >학기 (방학 제외)</button>
+            </div>
+          </div>
+          <p className="mb-2 text-[11px] text-slate-500">
+            체크된 월에만 이용권 선택 화면에 노출. 전체 선택/해제는 항상 노출과 동일.
+            현재 월: <b>{new Date().getMonth() + 1}월</b>
+          </p>
+          <div className="grid grid-cols-6 gap-2 text-sm sm:grid-cols-12">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => {
+              const months = v.availableMonths;
+              const allActive = !months || months.length === 0 || months.length === 12;
+              const checked = allActive ? true : months!.includes(m);
+              return (
+                <label key={m} className="flex items-center justify-center gap-1 rounded border border-slate-200 bg-white px-1 py-1">
+                  <input
+                    type="checkbox"
+                    className="accent-brand-600"
+                    checked={checked}
+                    onChange={(e) => {
+                      const cur = new Set(allActive ? [1,2,3,4,5,6,7,8,9,10,11,12] : months!);
+                      if (e.target.checked) cur.add(m); else cur.delete(m);
+                      const next = Array.from(cur).sort((a, b) => a - b);
+                      setV({ ...v, availableMonths: next.length === 12 ? undefined : next });
+                    }}
+                  />
+                  <span className="text-xs">{m}월</span>
                 </label>
               );
             })}

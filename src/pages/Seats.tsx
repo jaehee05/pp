@@ -8,7 +8,7 @@ import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
-import { ddayLabel, ddayOf, expiryShort } from '../lib/sub';
+import { ddayLabel, ddayOf, expiryShort, currentSubOf } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { liveAppState } from '../lib/firestoreSync';
@@ -92,7 +92,6 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const attState = useAttendance((s) => s.state);
   const subs = usePlans((s) => s.subs);
   const addSubscription = usePlans((s) => s.addSubscription);
-  const updateSubscription = usePlans((s) => s.updateSubscription);
   const plans = usePlans((s) => s.plans);
   const nav = useNavigate();
 
@@ -256,12 +255,13 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     if (!data.useExisting) {
       const plan = plans.find((p) => p.id === data.planId);
       if (!plan || !data.startAt) return;
-      // 기존 활성 이용권 자동 만료
-      const existingActive = subs.filter((s) => s.studentId === data.studentId && s.status === 'active');
-      for (const old of existingActive) {
-        updateSubscription(old.id, { status: 'expired', endAt: Math.min(old.endAt ?? Date.now(), Date.now()) });
-      }
-      const endAt = data.durationDays ? data.startAt + data.durationDays * 86400000 : undefined;
+      // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면 그 직후부터 시작
+      const futureEnds = subs
+        .filter((s) => s.studentId === data.studentId && s.status === 'active' && s.endAt && s.endAt > Date.now())
+        .map((s) => s.endAt as number);
+      const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
+      const actualStartAt = latestEnd ?? data.startAt;
+      const endAt = data.durationDays ? actualStartAt + data.durationDays * 86400000 : undefined;
       addSubscription({
         studentId: data.studentId,
         planId: plan.id,
@@ -270,7 +270,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
           durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
           price: plan.price,
         },
-        startAt: data.startAt,
+        startAt: actualStartAt,
         endAt,
         hoursRemaining: plan.hours,
         countsRemaining: plan.counts,
@@ -726,7 +726,7 @@ function SeatBox({
     empty: 'bg-slate-200',
   }[state];
   const sub = student
-    ? subs.filter((x) => x.studentId === student.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0]
+    ? currentSubOf(subs, student.id)
     : null;
   const endAt = sub?.endAt;
 

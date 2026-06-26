@@ -5,6 +5,7 @@ import { useStudents, type LocalStudent } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { fmtPhone } from '../../lib/format';
+import { currentSubOf } from '../../lib/sub';
 
 type MemberState = 'all' | 'normal' | 'restricted' | 'risk' | 'left';
 type MemberKind = 'all' | 'student' | 'adult' | 'unknown';
@@ -144,7 +145,7 @@ export function MembersAdmin() {
               )}
               {visible.map((s, i) => {
                 const a = att[s.id];
-                const sub = subs.filter((x) => x.studentId === s.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0];
+                const sub = currentSubOf(subs, s.id);
                 const sumPaid = pays.filter((p) => p.studentId === s.id && p.status === 'approved').reduce((acc, p) => acc + p.amount, 0);
                 // 이용상태: 활성 이용권 보유 여부로만 판단 (입실/외출은 별도 컬럼이 필요하면 추가).
                 // 활성 이용권 있고 현재 입실 → 진한 색, 단순 보유 → 옅은 색, 없음 → 이용안함

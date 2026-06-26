@@ -7,6 +7,7 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { fmtDateTime, fmtMoney } from '../../lib/format';
+import { currentSubOf } from '../../lib/sub';
 
 type LogTab = 'member' | 'use' | 'pay';
 
@@ -96,7 +97,10 @@ export function OpsMember() {
     );
   }
 
-  const sub = subs.filter((x) => x.studentId === student.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0];
+  const sub = currentSubOf(subs, student.id);
+  const upcomingSubs = subs
+    .filter((x) => x.studentId === student.id && x.status === 'active' && x.startAt > Date.now())
+    .sort((a, b) => a.startAt - b.startAt);
   const a = att.state[student.id];
   const inside = a?.state === 'in' || a?.state === 'temp_out';
 
@@ -265,13 +269,13 @@ export function OpsMember() {
         });
         setPaymentApproved(payId, { approvedAt: Date.now() });
 
-        // 새 이용권 발급 시 기존 활성 이용권은 즉시 만료 처리
-        const existingActive = subs.filter((s) => s.studentId === student.id && s.status === 'active');
-        for (const old of existingActive) {
-          updateSubscription(old.id, { status: 'expired', endAt: Math.min(old.endAt ?? Date.now(), Date.now()) });
-        }
-
-        const endAt = item.durationDays ? item.startAt + item.durationDays * 86400000 : undefined;
+        // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 그 직후부터 시작
+        const futureEnds = subs
+          .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
+          .map((s) => s.endAt as number);
+        const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
+        const actualStartAt = latestEnd ?? item.startAt;
+        const endAt = item.durationDays ? actualStartAt + item.durationDays * 86400000 : undefined;
         addSubscription({
           studentId: student.id, planId: plan.id,
           planSnapshot: {
@@ -279,7 +283,7 @@ export function OpsMember() {
             durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
             price: plan.price,
           },
-          startAt: item.startAt, endAt,
+          startAt: actualStartAt, endAt,
           hoursRemaining: plan.hours,
           countsRemaining: plan.counts,
           paymentId: payId,
@@ -446,7 +450,7 @@ export function OpsMember() {
             <button className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
               onClick={() => setShowHistory(true)}>+ 더보기</button>
           </div>
-          {!sub && <p className="py-6 text-center text-sm text-slate-400">등록된 이용권이 없습니다.</p>}
+          {!sub && upcomingSubs.length === 0 && <p className="py-6 text-center text-sm text-slate-400">등록된 이용권이 없습니다.</p>}
           {sub && (
             <div className="grid grid-cols-6 gap-y-3 text-sm">
               <Field2 label="이용권">{sub.planSnapshot.name}</Field2>
@@ -457,6 +461,20 @@ export function OpsMember() {
               <Field2 label="잔여기간">
                 {sub.endAt ? `${Math.max(0, Math.round((sub.endAt - Date.now()) / 86400000))}일` : '-'}
               </Field2>
+            </div>
+          )}
+          {upcomingSubs.length > 0 && (
+            <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+              <div className="text-xs font-semibold text-slate-500">📅 예정 이용권 ({upcomingSubs.length}건)</div>
+              {upcomingSubs.map((u) => (
+                <div key={u.id} className="flex items-center justify-between rounded-md bg-amber-50 px-3 py-2 text-xs">
+                  <span className="font-medium text-amber-900">{u.planSnapshot.name}</span>
+                  <span className="text-amber-700">
+                    {new Date(u.startAt).toISOString().slice(0, 10)}
+                    {u.endAt ? ` ~ ${new Date(u.endAt).toISOString().slice(0, 10)}` : ''}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </section>

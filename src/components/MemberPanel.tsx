@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
+import { currentSubOf } from '../lib/sub';
 
 type Tab = 'members' | 'memberLogs' | 'paymentLogs';
 
@@ -58,7 +59,7 @@ export function MemberPanel({ onClose }: { onClose?: () => void } = {}) {
             {filtered.length === 0 && <li className="p-6 text-center text-sm text-slate-400">회원 없음</li>}
             {filtered.map((s) => {
               const a = att[s.id];
-              const sub = subs.filter((x) => x.studentId === s.id && x.status === 'active').sort((a, b) => (b.endAt ?? 0) - (a.endAt ?? 0))[0];
+              const sub = currentSubOf(subs, s.id);
               // 이용중/이용안함은 활성 이용권 기준. 입실/외출은 별도 라벨로 우선 표시.
               const stateLabel = !sub
                 ? { txt: '이용안함', cls: 'bg-slate-100 text-slate-500' }

@@ -751,15 +751,13 @@ function SeatBox({
           <div className="flex flex-1 flex-col gap-0.5 pt-0.5 leading-none">
             {endAt ? (() => {
               const d = ddayOf(endAt);
-              const urgent = d <= 3;
+              const cls =
+                d <= 3   ? 'bg-orange-500 text-white font-semibold'         // 매우 임박
+                : d <= 7   ? 'bg-orange-200 text-orange-800 font-semibold' // 임박
+                : d <= 14  ? 'bg-amber-100 text-amber-800'                 // 주의
+                            : 'bg-slate-100 text-slate-600';               // 일반 (항상 컬러 띠)
               return (
-                <div className={`flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 text-[9px] ${
-                  urgent
-                    ? 'bg-orange-500 text-white font-semibold'
-                    : d <= 7
-                      ? 'text-rose-500'
-                      : 'text-slate-500'
-                }`}>
+                <div className={`flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 text-[9px] ${cls}`}>
                   <span className="font-mono">{expiryShort(endAt)}</span>
                   <span className="font-semibold">{ddayLabel(d)}</span>
                 </div>

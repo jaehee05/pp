@@ -66,6 +66,8 @@ export function OpsMember() {
   const [planSeatType, setPlanSeatType] = useState<'' | 'fixed' | 'free'>('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
   const [startDate, setStartDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  // 사용자가 직접 startDate 를 손댔는지 추적. 손댄 적 있으면 자동 동기화 안 함.
+  const [startDateTouched, setStartDateTouched] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
 
   // 주문
@@ -128,6 +130,14 @@ export function OpsMember() {
     return lastEnd ? nextDayStart(lastEnd) : Date.now();
   }, [subs, student?.id]);
   const startMonth = new Date(projectedStartTs).getMonth() + 1; // 1-12
+
+  // 시작일 자동 세팅: 사용자가 직접 안 건드렸으면 projectedStartTs 로 동기화.
+  // 이전 이용권 있으면 만료일 다음날, 없으면 오늘.
+  useEffect(() => {
+    if (startDateTouched) return;
+    const next = new Date(projectedStartTs).toISOString().slice(0, 10);
+    setStartDate((prev) => (prev === next ? prev : next));
+  }, [projectedStartTs, startDateTouched]);
   const availablePlans = useMemo(() => plans.filter((p) => {
     if (p.category !== 'seat') return false;
     if (!p.active) return false;
@@ -601,7 +611,20 @@ export function OpsMember() {
               </select>
             </Field>
             <Field label="시작일" col={3}>
-              <input className="input" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+              <input
+                className="input"
+                type="date"
+                value={startDate}
+                onChange={(e) => { setStartDate(e.target.value); setStartDateTouched(true); }}
+              />
+              {startDateTouched && (
+                <button
+                  type="button"
+                  className="mt-1 text-[11px] text-slate-500 underline hover:text-brand-600"
+                  onClick={() => { setStartDateTouched(false); }}
+                  title="자동 계산 (이전 이용권 만료 다음날 또는 오늘) 복원"
+                >↺ 자동 계산</button>
+              )}
             </Field>
             <Field label="" col={2}>
               <button className="btn-primary h-9 w-full" disabled={!selectedPlanId} onClick={addPlanToOrder}>+ 추가</button>

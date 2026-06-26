@@ -42,3 +42,11 @@ export function upcomingSubsOf<T extends SubLike>(subs: T[], studentId: string, 
     .filter((s) => s.studentId === studentId && s.status === 'active' && s.startAt > now)
     .sort((a, b) => a.startAt - b.startAt);
 }
+
+// 활성 이용권 중 가장 늦은 종료 시각 (현재 + 예정 모두 포함). D-day 계산용.
+export function lastActiveEndOf<T extends SubLike>(subs: T[], studentId: string): number | null {
+  const ends = subs
+    .filter((s) => s.studentId === studentId && s.status === 'active' && s.endAt)
+    .map((s) => s.endAt as number);
+  return ends.length > 0 ? Math.max(...ends) : null;
+}

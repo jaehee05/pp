@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppHeader } from './AppHeader';
 import { MemberPanel } from './MemberPanel';
+import { PaymentMockBanner } from './PaymentMockBanner';
 
 const NAV = [
   { to: '/ops/layout', label: '배치도', icon: '🧩' },
@@ -17,6 +18,7 @@ export function OpsLayout() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
       <AppHeader onMenu={() => setNav(true)} />
+      <PaymentMockBanner />
       <div className="relative flex flex-1 overflow-hidden">
         {/* 좌측 메뉴 백드롭 (모바일) */}
         {nav && <div className="fixed inset-0 top-14 z-[60] bg-black/30 md:hidden" onClick={() => setNav(false)} />}

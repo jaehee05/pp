@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { AppHeader } from './AppHeader';
+import { PaymentMockBanner } from './PaymentMockBanner';
 
 interface NavItem {
   to?: string;
@@ -50,6 +51,7 @@ export function AdminLayout() {
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden">
       <AppHeader onMenu={() => setDrawer(true)} />
+      <PaymentMockBanner />
       <div className="relative flex flex-1 overflow-hidden">
         {/* 모바일 백드롭 */}
         {drawer && (

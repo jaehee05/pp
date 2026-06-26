@@ -8,7 +8,7 @@ import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
-import { ddayLabel, ddayOf, expiryShort, currentSubOf } from '../lib/sub';
+import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { liveAppState } from '../lib/firestoreSync';
@@ -728,7 +728,8 @@ function SeatBox({
   const sub = student
     ? currentSubOf(subs, student.id)
     : null;
-  const endAt = sub?.endAt;
+  // D-day 는 활성 이용권 전체(현재+예정)의 가장 늦은 종료일 기준
+  const endAt = student ? lastActiveEndOf(subs, student.id) ?? sub?.endAt : sub?.endAt;
 
   return (
     <div

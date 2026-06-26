@@ -21,6 +21,21 @@ export interface PayRequest {
   taxFree?: boolean;
 }
 
+let mockCache: boolean | null = null;
+let mockPromise: Promise<boolean> | null = null;
+export function fetchPaymentMock(): Promise<boolean> {
+  if (mockCache !== null) return Promise.resolve(mockCache);
+  if (mockPromise) return mockPromise;
+  mockPromise = fetch('/api/payment/config')
+    .then((r) => r.json())
+    .then((d: { mock?: boolean }) => {
+      mockCache = !!d?.mock;
+      return mockCache;
+    })
+    .catch(() => { mockCache = false; return false; });
+  return mockPromise;
+}
+
 export async function chargeCard(req: PayRequest): Promise<PayResult> {
   try {
     const res = await fetch('/api/payment/charge', {

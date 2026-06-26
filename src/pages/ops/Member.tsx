@@ -8,7 +8,7 @@ import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { chargeCard } from '../../lib/payment';
 import { fmtDateTime, fmtMoney } from '../../lib/format';
-import { currentSubOf } from '../../lib/sub';
+import { currentSubOf, lastActiveEndOf } from '../../lib/sub';
 
 type LogTab = 'member' | 'use' | 'pay';
 
@@ -455,7 +455,12 @@ export function OpsMember() {
               <Field2 label="종료일">{sub.endAt ? new Date(sub.endAt).toISOString().slice(0, 10) : '-'}</Field2>
               <Field2 label="이용기간">{sub.planSnapshot.durationDays ? `${sub.planSnapshot.durationDays}일` : '-'}</Field2>
               <Field2 label="잔여기간">
-                {sub.endAt ? `${Math.max(0, Math.round((sub.endAt - Date.now()) / 86400000))}일` : '-'}
+                {(() => {
+                  const lastEnd = lastActiveEndOf(subs, student.id);
+                  if (!lastEnd) return '-';
+                  const days = Math.max(0, Math.round((lastEnd - Date.now()) / 86400000));
+                  return upcomingSubs.length > 0 ? `${days}일 (예정 포함)` : `${days}일`;
+                })()}
               </Field2>
             </div>
           )}

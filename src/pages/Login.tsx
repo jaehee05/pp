@@ -5,7 +5,6 @@ import { useBranding } from '../store/branding';
 
 export function LoginPage() {
   const login = useAuth((s) => s.login);
-  const hasOnlyTemp = useAuth((s) => s.hasOnlyTemp);
   const { brand, storeName } = useBranding();
   const nav = useNavigate();
 
@@ -61,13 +60,6 @@ export function LoginPage() {
           <button type="submit" className="btn-primary w-full py-2.5" disabled={busy}>
             {busy ? '로그인 중…' : '로그인'}
           </button>
-
-          {hasOnlyTemp() && (
-            <p className="rounded-md bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-700">
-              최초 로그인: 임시 계정 <b>admin</b> / <b>admin1234!</b> 으로 로그인한 뒤
-              관리자 계정을 생성하면 임시 계정은 자동 삭제됩니다.
-            </p>
-          )}
         </form>
       </div>
     </div>

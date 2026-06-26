@@ -6,7 +6,6 @@ import { deviceAgent } from '../../lib/deviceAgent';
 export function AccountPage() {
   const accounts = useAuth((s) => s.accounts);
   const current = useAuth((s) => s.current());
-  const hasOnlyTemp = useAuth((s) => s.hasOnlyTemp());
   const createAdmin = useAuth((s) => s.createAdmin);
   const changePassword = useAuth((s) => s.changePassword);
   const removeAccount = useAuth((s) => s.removeAccount);
@@ -109,13 +108,6 @@ export function AccountPage() {
     <>
       <PageHeader title="관리자 계정" desc="로그인 계정 관리" />
       <div className="space-y-6 p-4 sm:p-6">
-        {hasOnlyTemp && (
-          <div className="card border-l-4 border-amber-400 bg-amber-50 p-4 text-sm text-amber-800">
-            <b>임시 계정으로 사용 중입니다.</b> 아래에서 실제 관리자 계정을 생성하면
-            임시 계정(<code>admin</code>)은 자동으로 삭제됩니다.
-          </div>
-        )}
-
         {msg && (
           <div className={`rounded-md px-3 py-2 text-sm ${
             msg.kind === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>

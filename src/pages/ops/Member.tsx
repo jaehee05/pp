@@ -559,7 +559,14 @@ export function OpsMember() {
 
         {/* 이용권 선택 */}
         <section className="card p-6">
-          <h3 className="mb-3 font-semibold">이용권 선택</h3>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <h3 className="font-semibold">이용권 선택</h3>
+            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
+              💡 할인 혜택 적용 이용권은 [회원수정] → [할인 대상] 에서 학생의 과목 수
+              (1과목 / 2과목이상)를 먼저 지정해야 노출됩니다.
+              현재 학생: <b>{student?.discountTier ?? '없음'}</b>
+            </span>
+          </div>
           <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">
             <Field label="좌석타입" col={3}>
               <select className="input" value={planSeatType}

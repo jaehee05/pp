@@ -36,6 +36,7 @@ const NAV: NavItem[] = [
     ],
   },
   { to: '/admin/help', label: '사용 설명서', icon: '📘' },
+  { to: '/updates', label: '릴리즈 노트', icon: '📰' },
 ];
 
 export function AdminLayout() {

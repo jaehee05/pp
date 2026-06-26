@@ -17,6 +17,8 @@ import { OpsMember } from './pages/ops/Member';
 import { OpsStub } from './pages/ops/Stub';
 import { KioskPage } from './pages/Kiosk';
 import { LoginPage } from './pages/Login';
+import { UpdatesIndexPage } from './pages/Updates';
+import { UpdateDetailPage } from './pages/UpdateDetail';
 import { AccountPage } from './pages/admin/Account';
 import { RequireAuth } from './components/AuthGate';
 import { useRealtimeStores } from './lib/realtime';
@@ -28,6 +30,8 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/kiosk" element={<KioskPage />} />
+        <Route path="/updates" element={<UpdatesIndexPage />} />
+        <Route path="/updates/:slug" element={<UpdateDetailPage />} />
         <Route index element={<Navigate to="/admin/dashboard" replace />} />
 
         <Route path="/admin" element={<RequireAuth><AdminLayout /></RequireAuth>}>

@@ -748,7 +748,7 @@ function SeatBox({
 
         {/* 본문 */}
         {student ? (
-          <div className="flex flex-1 flex-col gap-0.5 pt-0.5 leading-none">
+          <div className="flex flex-1 flex-col leading-none">
             {endAt ? (() => {
               const d = ddayOf(endAt);
               const cls =

@@ -119,7 +119,15 @@ export function OpsMember() {
   function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
 
   // 좌석타입 + 숨김 + 할인 등급 + 노출 월 필터 적용된 이용권 후보
-  const thisMonth = new Date().getMonth() + 1; // 1-12
+  // 월 필터 기준일: 이 학생이 이 이용권을 산다면 "시작될" 날짜.
+  //  - 활성/예정 이용권 있음 → 마지막 종료일 다음날
+  //  - 없음 → 오늘
+  const projectedStartTs = useMemo(() => {
+    if (!student) return Date.now();
+    const lastEnd = lastActiveEndOf(subs, student.id);
+    return lastEnd ? nextDayStart(lastEnd) : Date.now();
+  }, [subs, student?.id]);
+  const startMonth = new Date(projectedStartTs).getMonth() + 1; // 1-12
   const availablePlans = useMemo(() => plans.filter((p) => {
     if (p.category !== 'seat') return false;
     if (!p.active) return false;
@@ -131,11 +139,11 @@ export function OpsMember() {
       const tier = student?.discountTier ?? '없음';
       if (!allowed.includes(tier)) return false;
     }
-    // 월 필터: availableMonths 지정 시 현재 월 포함되어야
+    // 월 필터: undefined = 항상, length<12 = 시즌 제한 → 시작 예정월이 포함돼야
     const months = p.availableMonths;
-    if (months && months.length > 0 && months.length < 12 && !months.includes(thisMonth)) return false;
+    if (months !== undefined && months.length < 12 && !months.includes(startMonth)) return false;
     return true;
-  }), [plans, planSeatType, showHidden, student?.discountTier, thisMonth]);
+  }), [plans, planSeatType, showHidden, student?.discountTier, startMonth]);
 
   function addPlanToOrder() {
     if (!selectedPlanId) return alert('이용권을 선택하세요.');
@@ -569,6 +577,10 @@ export function OpsMember() {
               💡 할인 혜택 적용 이용권은 [회원수정] → [할인 대상] 에서 학생의 과목 수
               (1과목 / 2과목이상)를 먼저 지정해야 노출됩니다.
               현재 학생: <b>{student?.discountTier ?? '없음'}</b>
+            </span>
+            <span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-700">
+              📅 시즌 제한 이용권은 <b>이용권 시작 예정월</b> 기준으로 필터링됨.
+              시작 예정: <b>{new Date(projectedStartTs).toISOString().slice(0, 10)} ({startMonth}월)</b>
             </span>
           </div>
           <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">

@@ -321,8 +321,13 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
               <button
                 type="button"
                 className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"
-                onClick={() => setV({ ...v, availableMonths: undefined })}
-              >전체</button>
+                title="한 번 클릭: 전체 선택 / 다시 클릭: 전체 해제"
+                onClick={() => {
+                  const m = v.availableMonths;
+                  const allOn = m === undefined || m.length === 12;
+                  setV({ ...v, availableMonths: allOn ? [] : undefined });
+                }}
+              >전체 토글</button>
               <button
                 type="button"
                 className="rounded bg-white px-2 py-0.5 ring-1 ring-slate-300 hover:bg-slate-100"

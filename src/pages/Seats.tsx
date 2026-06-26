@@ -757,7 +757,7 @@ function SeatBox({
                 : d <= 14  ? 'bg-amber-100 text-amber-800'                 // 주의
                             : 'bg-slate-100 text-slate-600';               // 일반 (항상 컬러 띠)
               return (
-                <div className={`flex items-center gap-1 whitespace-nowrap px-1.5 py-0.5 text-[9px] ${cls}`}>
+                <div className={`flex items-center justify-center gap-1 whitespace-nowrap px-1.5 py-0.5 text-[9px] ${cls}`}>
                   <span className="font-mono">{expiryShort(endAt)}</span>
                   <span className="font-semibold">{ddayLabel(d)}</span>
                 </div>

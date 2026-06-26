@@ -264,6 +264,13 @@ export function OpsMember() {
           status: 'approved',
         });
         setPaymentApproved(payId, { approvedAt: Date.now() });
+
+        // 새 이용권 발급 시 기존 활성 이용권은 즉시 만료 처리
+        const existingActive = subs.filter((s) => s.studentId === student.id && s.status === 'active');
+        for (const old of existingActive) {
+          updateSubscription(old.id, { status: 'expired', endAt: Math.min(old.endAt ?? Date.now(), Date.now()) });
+        }
+
         const endAt = item.durationDays ? item.startAt + item.durationDays * 86400000 : undefined;
         addSubscription({
           studentId: student.id, planId: plan.id,

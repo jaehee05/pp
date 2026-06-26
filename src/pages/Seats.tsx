@@ -92,6 +92,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const attState = useAttendance((s) => s.state);
   const subs = usePlans((s) => s.subs);
   const addSubscription = usePlans((s) => s.addSubscription);
+  const updateSubscription = usePlans((s) => s.updateSubscription);
   const plans = usePlans((s) => s.plans);
   const nav = useNavigate();
 
@@ -255,6 +256,11 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     if (!data.useExisting) {
       const plan = plans.find((p) => p.id === data.planId);
       if (!plan || !data.startAt) return;
+      // 기존 활성 이용권 자동 만료
+      const existingActive = subs.filter((s) => s.studentId === data.studentId && s.status === 'active');
+      for (const old of existingActive) {
+        updateSubscription(old.id, { status: 'expired', endAt: Math.min(old.endAt ?? Date.now(), Date.now()) });
+      }
       const endAt = data.durationDays ? data.startAt + data.durationDays * 86400000 : undefined;
       addSubscription({
         studentId: data.studentId,

@@ -7,7 +7,6 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { chargeCard } from '../../lib/payment';
-import { sendInvoice } from '../../lib/invoice';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
 
@@ -31,7 +30,7 @@ const METHOD_LABEL: Record<PayMethod, string> = {
   cash: '현금',
   remote: '비대면',
   localpay: '성남사랑',
-  invoice: '토스페이먼츠',
+  invoice: '지역상품권 QR',
 };
 
 export function OpsMember() {
@@ -227,50 +226,34 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
-  // === 토스페이먼츠 가상계좌 발급 (메인+서브 각각 1건) ===
+  // === 지역상품권 QR 결제 (수동 확인) ===
+  // 학생이 지역상품권 앱에서 메인/서브 가맹점 QR 을 각각 스캔해 결제하면,
+  // 운영자가 결제 확인 후 수동으로 [✓ 결제 완료 처리] 클릭 → 양쪽 완료 시 자동 활성화.
+  // 외부 API 호출 없음 (지역상품권은 가맹점 별 QR + 별도 정산 시스템).
   async function processInvoice() {
     if (!student) return;
     setProcessing(true);
-    setPayStatus('토스페이먼츠 가상계좌 발급 중…');
+    setPayStatus('지역상품권 QR 주문 등록 중…');
     try {
-      // orderId: 영문/숫자/-/_ 만 허용 (6~64자). student.id 영문화.
       const safeStudentId = student.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
       const orderId = `ord_${safeStudentId}_${Date.now().toString(36)}`;
-      const lines: { vendor: 'main' | 'sub'; amount: number; taxFreeAmount?: number }[] = [];
-      // 메인 = 면세 사업자 → 금액 전체를 taxFreeAmount 로 설정
-      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main, taxFreeAmount: vendorTotals.main });
+      const lines: { vendor: 'main' | 'sub'; amount: number }[] = [];
+      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main });
       if (vendorTotals.sub > 0) lines.push({ vendor: 'sub', amount: vendorTotals.sub });
-      const res = await sendInvoice({
-        orderId,
-        studentName: student.name,
-        studentPhone: student.phone,
-        lines,
-        validHours: 168, // 7일
-      });
-      if (!res.ok || !res.invoices) {
-        setPayStatus(`가상계좌 발급 실패: ${res.error ?? ''}`);
-        return;
-      }
       addPendingOrder({
         studentId: student.id,
         studentName: student.name,
         items: order,
         totalAmount: orderTotal,
-        invoices: res.invoices.map((iv) => ({
-          invoiceId: iv.invoiceId,
-          orderId: iv.orderId,
-          vendor: iv.vendor,
-          amount: iv.amount,
+        invoices: lines.map((l, i) => ({
+          invoiceId: `qr_${orderId}_${l.vendor}_${i}`,
+          orderId,
+          vendor: l.vendor,
+          amount: l.amount,
           status: 'pending' as const,
-          bank: iv.bank,
-          bankCode: iv.bankCode,
-          accountNumber: iv.accountNumber,
-          customerName: iv.customerName,
-          dueDate: iv.dueDate,
-          url: iv.url,
         })),
       });
-      setPayStatus(`📧 가상계좌 발급 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 양쪽 입금 확인 시 자동 활성화됩니다.`);
+      setPayStatus(`📋 지역상품권 QR 주문 등록 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 학생이 메인/서브 가맹점 QR 결제 완료하면 수동으로 [✓ 결제 완료 처리] 눌러주세요.`);
       setOrder([]);
       setPayments([{ method: 'card', amount: 0 }]);
     } catch (e) {
@@ -334,7 +317,7 @@ export function OpsMember() {
       if (endAt) runningLatestEnd = endAt;
     }
     markPendingOrderApplied(po.id, subIds, payId);
-    setPayStatus(`✅ 결제 완료 신호 수신 — 이용권 ${subIds.length}건 자동 활성화됨`);
+    setPayStatus(`✅ 양쪽 결제 완료 — 이용권 ${subIds.length}건 자동 활성화됨`);
     setTimeout(() => setPayStatus(''), 6000);
   }
 
@@ -356,9 +339,9 @@ export function OpsMember() {
     if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
     if (paidTotal !== orderTotal) return alert(`결제금액(${paidTotal.toLocaleString()})과 합계(${orderTotal.toLocaleString()})가 일치하지 않습니다.`);
 
-    // 토스페이먼츠 결제 링크 흐름: 다른 결제수단과 혼합 불가.
+    // 지역상품권 QR 흐름: 다른 결제수단과 혼합 불가.
     if (payments.some((p) => p.method === 'invoice')) {
-      if (payments.length > 1) return alert('토스페이먼츠 결제 링크는 다른 결제수단과 혼합할 수 없습니다.');
+      if (payments.length > 1) return alert('지역상품권 QR 결제는 다른 결제수단과 혼합할 수 없습니다.');
       return processInvoice();
     }
 
@@ -623,15 +606,16 @@ export function OpsMember() {
           )}
         </section>
 
-        {/* 결제 대기 (토스페이먼츠 결제 링크) */}
+        {/* 결제 대기 (지역상품권 QR 결제) */}
         {pendingOrders.filter((po) => po.studentId === student.id && po.status !== 'paid').length > 0 && (
           <section className="card border-2 border-sky-200 bg-sky-50/50 p-6">
             <div className="mb-3 flex items-center gap-2">
-              <h3 className="font-semibold text-sky-900">📧 결제 대기 (토스페이먼츠 가상계좌)</h3>
+              <h3 className="font-semibold text-sky-900">📋 결제 대기 (지역상품권 QR)</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
             <p className="mb-3 text-xs text-slate-600">
-              가상계좌를 발급했고 입금 대기 중. <b>메인 + 서브 모두 입금 확인</b> 시 이용권이 자동 활성화됩니다.
+              지역상품권 QR 결제 대기 중. 학생이 메인/서브 가맹점 QR 각각 결제 완료하면
+              운영자가 <b>[✓ 결제 완료 처리]</b> 를 눌러주세요. <b>양쪽 모두 완료</b> 시 이용권이 자동 활성화됩니다.
             </p>
             <div className="space-y-3">
               {pendingOrders
@@ -668,14 +652,14 @@ export function OpsMember() {
                                 : iv.status === 'cancelled' ? 'bg-rose-200 text-rose-800'
                                 : 'bg-amber-200 text-amber-800'
                               }`}>
-                                {iv.status === 'paid' ? '✓ 입금 완료' : iv.status === 'cancelled' ? '취소' : '⏳ 입금 대기'}
+                                {iv.status === 'paid' ? '✓ 결제 완료' : iv.status === 'cancelled' ? '취소' : '⏳ 결제 대기'}
                               </span>
                               {iv.status === 'pending' && (
                                 <button
                                   className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
                                   onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
-                                  title="시연용: 실제 환경에서는 토스 webhook 으로 자동 갱신"
-                                >✓ 입금 처리 (시뮬)</button>
+                                  title="해당 가맹점 지역상품권 QR 결제가 확인되면 클릭"
+                                >✓ 결제 완료 처리</button>
                               )}
                             </div>
                           </div>
@@ -708,7 +692,7 @@ export function OpsMember() {
                       {po.status !== 'cancelled' && (
                         <button
                           className="rounded bg-white px-2 py-1 text-[11px] text-rose-700 ring-1 ring-rose-300 hover:bg-rose-50"
-                          onClick={() => confirm('이 주문을 취소할까요? (이미 결제된 청구서는 별도 환불 필요)') && cancelPendingOrder(po.id)}
+                          onClick={() => confirm('이 주문을 취소할까요? (이미 결제된 건은 별도 환불 필요)') && cancelPendingOrder(po.id)}
                         >취소</button>
                       )}
                       {po.status === 'cancelled' && (

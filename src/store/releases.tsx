@@ -21,6 +21,26 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_015',
+    title: 'v1.0.15 — 결제 옵션: 지역상품권 QR (수동 확인)',
+    date: '2026-06-27',
+    body: `## 변경
+- 5번째 결제수단 라벨: \`토스페이먼츠\` → **\`지역상품권 QR\`**.
+- 흐름 단순화 — 외부 API 호출 제거:
+  - [결제하기] 클릭 → 메인/서브 가맹점별 결제 대기 항목만 등록 (PendingOrder).
+  - 학생이 지역상품권 앱으로 메인 QR + 서브 QR 각각 결제.
+  - 운영자가 결제 확인 후 패널에서 가맹점별 [✓ 결제 완료 처리] 클릭.
+  - **양쪽 완료** 시 이용권 자동 활성화 (기존 멱등 로직 그대로).
+
+## 참고
+- 토스페이먼츠 가상계좌 발급 API (\`/api/payment/invoice\`) / confirm (\`/api/payment/charge\`) /
+  webhook (\`/api/payment/webhook\`) endpoint 는 그대로 보존.
+  추후 카드 단말기 또는 SDK 결제창 연동 시 재사용 가능.
+- Vercel env 의 \`TOSS_*\` 키는 그대로 유지 (테스트).`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_014',
     title: 'v1.0.14 — 토스페이먼츠 가상계좌 정식 연동',
     date: '2026-06-27',

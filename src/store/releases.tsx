@@ -21,6 +21,23 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_016',
+    title: 'v1.0.16 — 채널톡 상담 버튼 + 회원정보 연동',
+    date: '2026-06-27',
+    body: `## 새 기능
+- **채널톡 (channel.io) 상담 버튼** 설치 — 우하단 floating 버튼.
+- **회원 정보 자동 연동**: 로그인한 관리자 계정의 \`id / name / username / accountType\`을 채널톡 프로필로 boot.
+  - 채널톡 대시보드에서 어느 운영자가 문의했는지 즉시 식별 가능.
+- 비로그인 화면 (로그인 페이지 등) 에서도 anonymous boot 로 문의 가능.
+- **키오스크 (\`/kiosk\`) 경로에서는 자동 숨김** — 학생 입퇴실 화면이라 상담 버튼 불필요.
+
+## 내부
+- \`src/components/ChannelTalk.tsx\` — SDK lazy load + auth/route 변화에 따라 boot/shutdown.
+- \`App.tsx\` 에 한 줄 마운트.`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_015',
     title: 'v1.0.15 — 결제 옵션: 지역상품권 QR (수동 확인)',
     date: '2026-06-27',

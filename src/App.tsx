@@ -21,12 +21,14 @@ import { UpdatesIndexPage } from './pages/Updates';
 import { UpdateDetailPage } from './pages/UpdateDetail';
 import { AccountPage } from './pages/admin/Account';
 import { RequireAuth } from './components/AuthGate';
+import { ChannelTalk } from './components/ChannelTalk';
 import { useRealtimeStores } from './lib/realtime';
 
 export default function App() {
   useRealtimeStores();
   return (
     <BrowserRouter>
+      <ChannelTalk />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/kiosk" element={<KioskPage />} />

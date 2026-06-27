@@ -152,7 +152,7 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
                       {p.description ?? ''}
                       {p.availableMonths && p.availableMonths.length > 0 && p.availableMonths.length < 12 && (
                         <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                          📅 {p.availableMonths.join(',')}월
+                          📅 {seasonalBadgeLabel(p.availableMonths)}
                         </span>
                       )}
                     </td>

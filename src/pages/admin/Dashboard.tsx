@@ -10,9 +10,11 @@ export function Dashboard() {
 
   const inCount = Object.values(att.state).filter((s) => s.state === 'in').length;
   const activeSubs = subs.filter((s) => s.status === 'active');
-  const total = students.length || 1;
-  const usingCount = activeSubs.length;
-  const idleCount = total - usingCount;
+  const total = students.length;
+  // 학생 1명이 여러 활성권(현재+예정 큐잉)을 가질 수 있어 단순 length 는 중복 카운트.
+  // studentId 기준으로 dedupe.
+  const usingCount = new Set(activeSubs.map((s) => s.studentId)).size;
+  const idleCount = Math.max(0, total - usingCount);
 
   return (
     <>

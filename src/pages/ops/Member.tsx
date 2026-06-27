@@ -65,6 +65,7 @@ export function OpsMember() {
   // 이용권 선택
   const [planSeatType, setPlanSeatType] = useState<'' | 'fixed' | 'free'>('');
   const [selectedPlanId, setSelectedPlanId] = useState<string>('');
+  const [planQty, setPlanQty] = useState<number>(1);
   const [startDate, setStartDate] = useState<string>(() => toLocalISODate(Date.now()));
   // 사용자가 직접 startDate 를 손댔는지 추적. 손댄 적 있으면 자동 동기화 안 함.
   const [startDateTouched, setStartDateTouched] = useState(false);
@@ -149,15 +150,18 @@ export function OpsMember() {
     if (!selectedPlanId) return alert('이용권을 선택하세요.');
     const plan = plans.find((p) => p.id === selectedPlanId);
     if (!plan) return;
-    setOrder((prev) => [...prev, {
-      id: `o_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+    const qty = Math.max(1, Math.min(99, Math.floor(planQty) || 1));
+    const items: OrderItem[] = Array.from({ length: qty }, (_, i) => ({
+      id: `o_${Date.now().toString(36)}_${i}_${Math.random().toString(36).slice(2, 6)}`,
       planId: plan.id, kind: 'plan',
-      name: plan.name,
+      name: qty > 1 ? `${plan.name} (${i + 1}/${qty})` : plan.name,
       amount: plan.price,
       startAt: fromLocalISODate(startDate),
       durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
-    }]);
+    }));
+    setOrder((prev) => [...prev, ...items]);
     setSelectedPlanId('');
+    setPlanQty(1);
     syncAmount();
   }
   function addEtc(name: string, amount: number) {
@@ -270,6 +274,11 @@ export function OpsMember() {
       setPayStatus('승인 완료. 이용권/결제 저장 중…');
 
       const cardSplit = splits.find((s) => s.method === 'card');
+      // 큐잉 시작점: 기존 active 이용권 중 가장 늦은 endAt. 루프 내에서 새로 추가하는 이용권의 endAt 으로 갱신.
+      const existingFutureEnds = subs
+        .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
+        .map((s) => s.endAt as number);
+      let runningLatestEnd: number | null = existingFutureEnds.length > 0 ? Math.max(...existingFutureEnds) : null;
       for (const item of order) {
         if (item.kind !== 'plan') continue;
         const plan = plans.find((x) => x.id === item.planId);
@@ -283,12 +292,8 @@ export function OpsMember() {
         });
         setPaymentApproved(payId, { approvedAt: Date.now() });
 
-        // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 기존 종료일 다음날 00:00 부터 시작
-        const futureEnds = subs
-          .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
-          .map((s) => s.endAt as number);
-        const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
-        const actualStartAt = latestEnd ? nextDayStart(latestEnd) : item.startAt;
+        // 큐잉: 가장 늦은 endAt 다음날부터. (수량>1 이거나 갱신권일 때 올바르게 누적)
+        const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
         // 기간권 종료일 = 시작일 + (일수-1) (포함 기준).
         // 예: 6/1 시작 + 30일 = 6/30 만료 (다음권은 7/1 부터).
         const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
@@ -305,6 +310,7 @@ export function OpsMember() {
           paymentId: payId,
           status: 'active',
         });
+        if (endAt) runningLatestEnd = endAt;
       }
       const otherTotal = order.filter((i) => i.kind !== 'plan').reduce((s, i) => s + i.amount, 0);
       if (otherTotal !== 0) {
@@ -569,7 +575,7 @@ export function OpsMember() {
         <section className="card p-6">
           <h3 className="mb-3 font-semibold">이용권 선택</h3>
           <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">
-            <Field label="좌석타입" col={3}>
+            <Field label="좌석타입" col={2}>
               <select className="input" value={planSeatType}
                 onChange={(e) => { setPlanSeatType(e.target.value as '' | 'fixed' | 'free'); setSelectedPlanId(''); }}>
                 <option value="">전체</option>
@@ -600,6 +606,16 @@ export function OpsMember() {
                   title="자동 계산 (이전 이용권 만료 다음날 또는 오늘) 복원"
                 >↺ 자동 계산</button>
               )}
+            </Field>
+            <Field label="수량" col={1}>
+              <input
+                className="input text-center"
+                type="number"
+                min={1}
+                max={99}
+                value={planQty}
+                onChange={(e) => setPlanQty(Math.max(1, Math.min(99, +e.target.value || 1)))}
+              />
             </Field>
             <Field label="" col={2}>
               <button className="btn-primary h-9 w-full" disabled={!selectedPlanId} onClick={addPlanToOrder}>+ 추가</button>

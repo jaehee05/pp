@@ -49,7 +49,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const secretSub = env.TOSS_SECRET_KEY_SUB ?? env.TOSS_SECRET_KEY ?? '';
   const baseUrl = env.TOSS_BASE_URL ?? 'https://api.tosspayments.com';
   const secret = body.merchant === 'sub' ? secretSub : secretMain;
-  const useMock = !secret || secret.startsWith('dummy');
+  // 실 키가 있어도 SDK 결제창 인증을 거치지 않은 (paymentKey 없는) 호출은 mock 으로 처리.
+  // 카드 SDK 결제창은 아직 미구현이라 현 시점 모든 카드 호출은 mock 분기로 흐름.
+  const useMock = !secret || secret.startsWith('dummy') || !body.paymentKey;
 
   // --- Mock 모드 ---
   // SDK 결제창 인증을 거치지 않은 단순 카드 호출도 허용 (paymentKey 없으면 가짜 생성).
@@ -80,13 +82,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   // --- 실제 토스 confirm 모드 ---
-  // 실키 등록 상태에서 paymentKey 없이 호출 = SDK 결제창 인증을 거치지 않은 것 → 에러.
-  if (!body.paymentKey) {
-    return res.status(400).json({
-      ok: false,
-      error: '실 결제는 토스 SDK 결제창에서 인증 후 paymentKey 가 있어야 합니다. (현재 카드 결제 흐름은 SDK 미구현 — mock 모드에서만 사용)',
-    });
-  }
+  // 이 분기는 paymentKey 있고 실 키도 있을 때만 도달 (SDK 결제창 인증 후 호출).
 
   // --- 실제 토스 confirm ---
   try {

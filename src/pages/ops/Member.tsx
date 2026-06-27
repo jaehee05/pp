@@ -31,7 +31,7 @@ const METHOD_LABEL: Record<PayMethod, string> = {
   cash: '현금',
   remote: '비대면',
   localpay: '성남사랑',
-  invoice: '결제선생',
+  invoice: '토스페이먼츠',
 };
 
 export function OpsMember() {
@@ -227,11 +227,11 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
-  // === 결제선생 청구서 발송 (메인+서브 각각 1건) ===
+  // === 토스페이먼츠 결제 링크 발송 (메인+서브 각각 1건) ===
   async function processInvoice() {
     if (!student) return;
     setProcessing(true);
-    setPayStatus('결제선생 청구서 발송 중…');
+    setPayStatus('토스페이먼츠 결제 링크 발송 중…');
     try {
       const orderId = `ord_${student.id}_${Date.now().toString(36)}`;
       const lines: { vendor: 'main' | 'sub'; amount: number }[] = [];
@@ -260,7 +260,7 @@ export function OpsMember() {
           url: iv.url,
         })),
       });
-      setPayStatus(`📧 청구서 발송 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 결제 완료 시 자동 활성화됩니다.`);
+      setPayStatus(`📧 토스 결제 링크 발송 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 결제 완료 시 자동 활성화됩니다.`);
       setOrder([]);
       setPayments([{ method: 'card', amount: 0 }]);
     } catch (e) {
@@ -346,9 +346,9 @@ export function OpsMember() {
     if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
     if (paidTotal !== orderTotal) return alert(`결제금액(${paidTotal.toLocaleString()})과 합계(${orderTotal.toLocaleString()})가 일치하지 않습니다.`);
 
-    // 결제선생 청구서 흐름: 다른 결제수단과 혼합 불가.
+    // 토스페이먼츠 결제 링크 흐름: 다른 결제수단과 혼합 불가.
     if (payments.some((p) => p.method === 'invoice')) {
-      if (payments.length > 1) return alert('결제선생 청구서는 다른 결제수단과 혼합할 수 없습니다.');
+      if (payments.length > 1) return alert('토스페이먼츠 결제 링크는 다른 결제수단과 혼합할 수 없습니다.');
       return processInvoice();
     }
 
@@ -613,15 +613,15 @@ export function OpsMember() {
           )}
         </section>
 
-        {/* 결제 대기 (결제선생 청구서) */}
+        {/* 결제 대기 (토스페이먼츠 결제 링크) */}
         {pendingOrders.filter((po) => po.studentId === student.id && po.status !== 'paid').length > 0 && (
           <section className="card border-2 border-sky-200 bg-sky-50/50 p-6">
             <div className="mb-3 flex items-center gap-2">
-              <h3 className="font-semibold text-sky-900">📧 결제 대기 (결제선생 청구서)</h3>
+              <h3 className="font-semibold text-sky-900">📧 결제 대기 (토스페이먼츠 결제 링크)</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
             <p className="mb-3 text-xs text-slate-600">
-              청구서를 발송했고 결제 완료 신호 대기 중. <b>모든 청구서가 결제 완료</b> 되어야 이용권이 자동 활성화됩니다.
+              토스페이먼츠 결제 링크를 발송했고 완료 신호 대기 중. <b>모든 결제 링크가 결제 완료</b> 되어야 이용권이 자동 활성화됩니다.
             </p>
             <div className="space-y-3">
               {pendingOrders
@@ -668,7 +668,7 @@ export function OpsMember() {
                               <button
                                 className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
                                 onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
-                                title="시연용: 실제 환경에서는 결제선생 webhook 이 자동 호출"
+                                title="시연용: 실제 환경에서는 토스페이먼츠 webhook 이 자동 호출"
                               >✓ 결제 완료 처리 (시뮬)</button>
                             )}
                           </div>

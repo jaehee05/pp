@@ -1,12 +1,12 @@
-// Vercel Node Serverless Function — 결제선생(PaymentTeacher) API 프록시.
-// 환경변수 설정 시 실제 결제선생 호출, 미설정 시 mock(시연용).
+// Vercel Node Serverless Function — 토스페이먼츠 결제 승인 프록시.
+// (단말기 카드 결제 흐름. 청구서 발송은 /api/payment/invoice 참조)
+// 환경변수 설정 시 실제 토스 호출, 미설정 시 mock(시연용).
 //
 // 필요한 환경변수:
-//   PAYMENTTEACHER_API_KEY        결제선생 API 키
-//   PAYMENTTEACHER_API_SECRET     시크릿 (있을 경우)
-//   PAYMENTTEACHER_MERCHANT_MAIN  메인 가맹점 ID (합격공간 독서실)
-//   PAYMENTTEACHER_MERCHANT_SUB   서브 가맹점 ID (합격공간 진학지도교습소)
-//   PAYMENTTEACHER_BASE_URL       API endpoint (기본: https://api.paymentteacher.com)
+//   TOSS_SECRET_KEY              토스 시크릿 키
+//   TOSS_MERCHANT_MAIN_KEY       메인(독서실) 가맹점 키
+//   TOSS_MERCHANT_SUB_KEY        서브(교습소) 가맹점 키
+//   TOSS_BASE_URL                기본: https://api.tosspayments.com
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
@@ -43,10 +43,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!body.orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
 
   const env = process.env;
-  const apiKey = env.PAYMENTTEACHER_API_KEY;
-  const merchantMain = env.PAYMENTTEACHER_MERCHANT_MAIN ?? env.PPURIO_USERNAME ?? '3285619001';
-  const merchantSub = env.PAYMENTTEACHER_MERCHANT_SUB ?? '3285620001';
-  const baseUrl = env.PAYMENTTEACHER_BASE_URL ?? 'https://api.paymentteacher.com';
+  const apiKey = env.TOSS_SECRET_KEY;
+  const merchantMain = env.TOSS_MERCHANT_MAIN_KEY ?? '';
+  const merchantSub = env.TOSS_MERCHANT_SUB_KEY ?? '';
+  const baseUrl = env.TOSS_BASE_URL ?? 'https://api.tosspayments.com';
   const merchantId = body.merchant === 'sub' ? merchantSub : merchantMain;
 
   // --- Mock 모드 (실 키 미설정) ---
@@ -70,46 +70,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // --- 실제 결제선생 호출 (API 키 발급 받으면 활성) ---
+  // --- 실제 토스페이먼츠 호출 (시크릿 키 발급 받으면 활성) ---
+  // 토스는 client-side 위젯이 기본 흐름. 단말기 직접 호출용 endpoint 사용 시 아래 형태.
   try {
-    const resp = await fetch(`${baseUrl}/v1/payment/approve`, {
+    const authHeader = `Basic ${Buffer.from(`${apiKey}:`).toString('base64')}`;
+    const resp = await fetch(`${baseUrl}/v1/payments/confirm`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        merchant_id: merchantId,
-        order_id: body.orderId,
         amount: body.amount,
-        installment: body.installment ?? 0,
-        tax_free: body.taxFree ?? true,
+        orderId: body.orderId,
+        ...(merchantId ? { subMerchantKey: merchantId } : {}),
       }),
     });
     const data = await resp.json() as {
-      code?: string;
+      paymentKey?: string;
+      status?: string;
+      approvedAt?: string;
+      card?: { issuerCode?: string; number?: string; approveNo?: string };
       message?: string;
-      approval_no?: string;
-      issuer?: string;
-      card_no?: string;
-      tx_id?: string;
-      approved_at?: string;
     };
-    if (!resp.ok || (data.code && data.code !== '0000')) {
+    if (!resp.ok || !data.paymentKey) {
       return res.status(200).json({
         ok: false,
-        code: data.code,
         error: data.message ?? `HTTP ${resp.status}`,
       });
     }
     return res.status(200).json({
       ok: true,
-      approvalNo: data.approval_no,
-      issuer: data.issuer,
-      cardNo: data.card_no,
-      txId: data.tx_id,
-      approvedAt: data.approved_at,
-      code: data.code,
+      approvalNo: data.card?.approveNo,
+      issuer: data.card?.issuerCode,
+      cardNo: data.card?.number,
+      txId: data.paymentKey,
+      approvedAt: data.approvedAt,
     });
   } catch (e) {
     return res.status(500).json({

@@ -21,6 +21,29 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_013',
+    title: 'v1.0.13 — 결제 PG 전환: 결제선생 → 토스페이먼츠',
+    date: '2026-06-27',
+    body: `## 변경
+- 결제 PG 를 **결제선생 → 토스페이먼츠** 로 전환.
+- 결제수단 라벨: \`결제선생\` → **\`토스페이먼츠\`**.
+- 동작 흐름은 동일 — 메인/서브 가맹점에 각각 결제 링크 발송 → 양쪽 결제 완료 시 이용권 자동 활성화.
+
+## 환경변수
+- 기존 \`PAYMENTTEACHER_*\` → \`TOSS_*\` 로 교체:
+  - \`TOSS_SECRET_KEY\` (필수)
+  - \`TOSS_MERCHANT_MAIN_KEY\` / \`TOSS_MERCHANT_SUB_KEY\` (멀티 가맹점 시)
+  - \`TOSS_BASE_URL\` (기본 https://api.tosspayments.com)
+- 키 미설정 시 mock 모드 유지.
+
+## 내부
+- \`api/payment/invoice.ts\`: 토스 \`POST /v1/payments\` 호출 (subMerchantKey 라우팅).
+- \`api/payment/charge.ts\`: \`POST /v1/payments/confirm\` (단말기 호출용 placeholder).
+- \`api/payment/config.ts\`: \`TOSS_SECRET_KEY\` 검사.`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_012',
     title: 'v1.0.12 — 결제선생 청구서 비동기 결제',
     date: '2026-06-27',

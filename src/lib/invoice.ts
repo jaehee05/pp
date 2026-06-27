@@ -1,4 +1,4 @@
-// 결제선생 청구서 발송 클라이언트 (api/payment/invoice wrapper).
+// 토스페이먼츠 결제 링크 발송 클라이언트 (api/payment/invoice wrapper).
 export interface InvoiceLine { vendor: 'main' | 'sub'; amount: number; description?: string }
 export interface InvoiceRequest {
   orderId: string;

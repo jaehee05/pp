@@ -20,10 +20,10 @@ export function Dashboard() {
     <>
       <PageHeader title="대시보드" desc={`최근 업데이트: ${new Date().toLocaleString('ko-KR')}`} />
       <div className="grid grid-cols-1 gap-4 p-6 lg:grid-cols-3">
-        {/* 매출 현황 — 결제선생 연동 후 활성 예정 */}
+        {/* 매출 현황 — 토스페이먼츠 연동 후 활성 예정 */}
         <div className="card p-5 lg:col-span-2">
           <h3 className="mb-2 font-semibold text-slate-500">매출 현황 (준비 중)</h3>
-          <p className="text-xs text-slate-400">결제선생 API 연동 완료 후 실시간 집계 표시 예정.</p>
+          <p className="text-xs text-slate-400">토스페이먼츠 연동 완료 후 실시간 집계 표시 예정.</p>
         </div>
 
         {/* 출입문 / 공지 placeholder */}

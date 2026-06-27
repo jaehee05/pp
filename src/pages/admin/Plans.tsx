@@ -5,6 +5,16 @@ import { usePlans } from '../../store/plans';
 import type { Plan } from '../../lib/types';
 import { fmtMoney } from '../../lib/format';
 
+// 시즌 뱃지 라벨: 적은 쪽을 표기. 7개 이상 선택돼 있으면 "X월 제외" 형식, 아니면 "X,Y,Z월".
+export function seasonalBadgeLabel(months: number[]): string {
+  const sorted = [...months].sort((a, b) => a - b);
+  if (sorted.length > 6) {
+    const excluded = Array.from({ length: 12 }, (_, i) => i + 1).filter((m) => !sorted.includes(m));
+    return `${excluded.join(',')}월 제외`;
+  }
+  return `${sorted.join(',')}월`;
+}
+
 function periodLabel(p: Plan): string {
   if (p.type === 'period' && p.durationDays != null) {
     if (p.durationDays === 1) return '1일';

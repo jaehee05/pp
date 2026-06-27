@@ -21,6 +21,27 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_012',
+    title: 'v1.0.12 — 결제선생 청구서 비동기 결제',
+    date: '2026-06-27',
+    body: `## 새 결제수단: **결제선생**
+- 결제 수단에 \`결제선생\` 옵션 추가 (기존 카드/현금/비대면/성남사랑 + 1).
+- 선택 후 [결제하기] → 결제선생 API 로 **메인/서브 각각 청구서 1건씩 (총 2건)** 발송.
+- 청구서 발송 직후엔 이용권/결제 활성화되지 **않음**. "결제 대기" 상태로 보관.
+- 회원정보 페이지에 **📧 결제 대기 패널** 노출:
+  - 각 청구서별 가맹점(메인/서브) / 금액 / 결제 URL / 상태 (대기/완료/취소)
+  - **양쪽 청구서 모두 결제 완료 시** 자동으로 이용권 + 결제 기록 생성, 큐잉 누적 적용.
+- 시연 모드: 청구서당 \`✓ 결제 완료 처리 (시뮬)\` 버튼으로 webhook 시뮬레이션 가능.
+
+## 내부
+- \`Plan.method\` 에 \`'invoice'\` 추가.
+- \`PendingOrder\` 인터페이스 + zustand 액션 \`addPendingOrder / updateInvoiceStatus / markPendingOrderApplied / cancelPendingOrder / removePendingOrder\` 추가.
+- \`/api/payment/invoice\` 서버리스 함수 신설 (mock + 실 호출 분기).
+- \`src/lib/invoice.ts\` 클라이언트 래퍼.`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_011',
     title: 'v1.0.11 — 이용권 구매 수량 옵션',
     date: '2026-06-27',

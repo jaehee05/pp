@@ -7,10 +7,45 @@ type LocalPlan = Plan;
 type LocalSub = Omit<Subscription, 'startAt' | 'endAt'> & { startAt: number; endAt?: number };
 type LocalPay = Omit<Payment, 'createdAt' | 'approvedAt'> & { createdAt: number; approvedAt?: number };
 
+// 결제선생 청구서 단건 상태
+export interface InvoicePart {
+  invoiceId: string;          // 결제선생 청구서 ID (mock: inv_xxx)
+  vendor: 'main' | 'sub';     // 메인(독서실) / 서브(교습소)
+  amount: number;
+  status: 'pending' | 'paid' | 'cancelled';
+  url?: string;               // 청구서 결제 페이지 URL (PaymentTeacher 응답)
+  paidAt?: number;
+}
+
+// 청구서 발송 후 결제 대기 중인 주문. 모든 invoice.status === 'paid' 가 되면 이용권/결제 활성화.
+export interface PendingOrder {
+  id: string;
+  studentId: string;
+  studentName?: string;
+  createdAt: number;
+  items: {
+    planId: string;
+    name: string;
+    amount: number;
+    startAt: number;
+    durationDays?: number;
+    hours?: number;
+    counts?: number;
+    kind: 'plan' | 'etc' | 'discount';
+  }[];
+  totalAmount: number;
+  invoices: InvoicePart[];      // 보통 메인+서브 2건
+  status: 'pending' | 'paid' | 'cancelled';
+  appliedSubIds?: string[];     // 완료 후 생성된 sub ID 들 (멱등성용)
+  appliedPayId?: string;
+  notes?: string;
+}
+
 interface State {
   plans: LocalPlan[];
   subs: LocalSub[];
   pays: LocalPay[];
+  pendingOrders: PendingOrder[];
   upsertPlan: (p: LocalPlan) => void;
   removePlan: (id: string) => void;
   movePlan: (id: string, delta: number) => void;
@@ -20,6 +55,11 @@ interface State {
   addSubscription: (s: Omit<LocalSub, 'id'>) => string;
   updateSubscription: (id: string, patch: Partial<LocalSub>) => void;
   removeSubscription: (id: string) => void;
+  addPendingOrder: (o: Omit<PendingOrder, 'id' | 'createdAt' | 'status'>) => string;
+  updateInvoiceStatus: (orderId: string, invoiceId: string, status: InvoicePart['status']) => void;
+  markPendingOrderApplied: (orderId: string, subIds: string[], payId: string) => void;
+  cancelPendingOrder: (orderId: string) => void;
+  removePendingOrder: (orderId: string) => void;
 }
 
 const DEFAULT_PLANS: LocalPlan[] = [
@@ -35,6 +75,7 @@ export const usePlans = create<State>()(
       plans: DEFAULT_PLANS,
       subs: [],
       pays: [],
+      pendingOrders: [],
       upsertPlan: (p) => set((st) => {
         const exists = st.plans.some((x) => x.id === p.id);
         return { plans: exists ? st.plans.map((x) => (x.id === p.id ? p : x)) : [...st.plans, p] };
@@ -104,6 +145,38 @@ export const usePlans = create<State>()(
         }),
       })),
       removeSubscription: (id) => set((st) => ({ subs: st.subs.filter((s) => s.id !== id) })),
+
+      addPendingOrder: (o) => {
+        const id = `po_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+        const item: PendingOrder = { id, createdAt: Date.now(), status: 'pending', ...o };
+        set((st) => ({ pendingOrders: [item, ...st.pendingOrders] }));
+        return id;
+      },
+      updateInvoiceStatus: (orderId, invoiceId, status) => set((st) => ({
+        pendingOrders: st.pendingOrders.map((po) => {
+          if (po.id !== orderId) return po;
+          const invoices = po.invoices.map((iv) =>
+            iv.invoiceId === invoiceId
+              ? { ...iv, status, paidAt: status === 'paid' ? Date.now() : iv.paidAt }
+              : iv,
+          );
+          const allPaid = invoices.every((iv) => iv.status === 'paid');
+          return { ...po, invoices, status: allPaid ? 'paid' : po.status };
+        }),
+      })),
+      markPendingOrderApplied: (orderId, subIds, payId) => set((st) => ({
+        pendingOrders: st.pendingOrders.map((po) =>
+          po.id === orderId ? { ...po, appliedSubIds: subIds, appliedPayId: payId } : po,
+        ),
+      })),
+      cancelPendingOrder: (orderId) => set((st) => ({
+        pendingOrders: st.pendingOrders.map((po) =>
+          po.id === orderId ? { ...po, status: 'cancelled' } : po,
+        ),
+      })),
+      removePendingOrder: (orderId) => set((st) => ({
+        pendingOrders: st.pendingOrders.filter((po) => po.id !== orderId),
+      })),
     }),
     { name: 'pp.plans.v1', storage: createJSONStorage(() => firestoreStorage) },
   ),

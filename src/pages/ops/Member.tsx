@@ -7,6 +7,7 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { chargeCard } from '../../lib/payment';
+import { sendInvoice } from '../../lib/invoice';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
 
@@ -23,13 +24,14 @@ interface OrderItem {
   counts?: number;
   kind: 'plan' | 'etc' | 'discount';
 }
-type PayMethod = 'card' | 'cash' | 'remote' | 'localpay';
+type PayMethod = 'card' | 'cash' | 'remote' | 'localpay' | 'invoice';
 interface PaymentSplit { method: PayMethod; amount: number; approvalNo?: string; txId?: string }
 const METHOD_LABEL: Record<PayMethod, string> = {
   card: '카드',
   cash: '현금',
   remote: '비대면',
   localpay: '성남사랑',
+  invoice: '결제선생',
 };
 
 export function OpsMember() {
@@ -37,7 +39,8 @@ export function OpsMember() {
   const student = useStudents((s) => s.get(id));
   const update = useStudents((s) => s.update);
   const att = useAttendance();
-  const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription, updateSubscription, removeSubscription } = usePlans();
+  const { subs, pays, plans, addPayment, setPaymentApproved, addSubscription, updateSubscription, removeSubscription,
+    pendingOrders, addPendingOrder, updateInvoiceStatus, markPendingOrderApplied, cancelPendingOrder, removePendingOrder } = usePlans();
   const [editSubId, setEditSubId] = useState<string | null>(null);
 
   // 회원 정보 편집 모드 — false 면 read-only, true 면 draft에 임시 보관 후 [수정 완료]로 일괄 저장
@@ -224,6 +227,107 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
+  // === 결제선생 청구서 발송 (메인+서브 각각 1건) ===
+  async function processInvoice() {
+    if (!student) return;
+    setProcessing(true);
+    setPayStatus('결제선생 청구서 발송 중…');
+    try {
+      const orderId = `ord_${student.id}_${Date.now().toString(36)}`;
+      const lines: { vendor: 'main' | 'sub'; amount: number }[] = [];
+      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main });
+      if (vendorTotals.sub > 0) lines.push({ vendor: 'sub', amount: vendorTotals.sub });
+      const res = await sendInvoice({
+        orderId,
+        studentName: student.name,
+        studentPhone: student.phone,
+        lines,
+      });
+      if (!res.ok || !res.invoices) {
+        setPayStatus(`청구서 발송 실패: ${res.error ?? ''}`);
+        return;
+      }
+      addPendingOrder({
+        studentId: student.id,
+        studentName: student.name,
+        items: order,
+        totalAmount: orderTotal,
+        invoices: res.invoices.map((iv) => ({
+          invoiceId: iv.invoiceId,
+          vendor: iv.vendor,
+          amount: iv.amount,
+          status: 'pending' as const,
+          url: iv.url,
+        })),
+      });
+      setPayStatus(`📧 청구서 발송 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 결제 완료 시 자동 활성화됩니다.`);
+      setOrder([]);
+      setPayments([{ method: 'card', amount: 0 }]);
+    } catch (e) {
+      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setPayStatus(''), 8000);
+    }
+  }
+
+  // 청구서가 모두 결제되면 자동으로 이용권/결제 생성.
+  // appliedSubIds 가 있으면 이미 처리됨 → 스킵 (멱등).
+  const readyPending = useMemo(() => pendingOrders.filter((po) =>
+    po.studentId === student?.id && po.status === 'paid' && !po.appliedSubIds,
+  ), [pendingOrders, student?.id]);
+  useEffect(() => {
+    for (const po of readyPending) {
+      applyPendingOrder(po);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readyPending]);
+
+  function applyPendingOrder(po: typeof pendingOrders[number]) {
+    if (!student || po.studentId !== student.id) return;
+    if (po.appliedSubIds) return;
+    const payId = addPayment({
+      studentId: student.id,
+      planId: po.items.find((i) => i.kind === 'plan')?.planId ?? 'multi',
+      amount: po.totalAmount,
+      method: 'invoice',
+      cardApprovalNo: po.invoices.map((iv) => iv.invoiceId).join('/'),
+      terminalTxId: po.id,
+      status: 'approved',
+    });
+    setPaymentApproved(payId, { approvedAt: Date.now() });
+    const existingFutureEnds = subs
+      .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
+      .map((s) => s.endAt as number);
+    let runningLatestEnd: number | null = existingFutureEnds.length > 0 ? Math.max(...existingFutureEnds) : null;
+    const subIds: string[] = [];
+    for (const item of po.items) {
+      if (item.kind !== 'plan') continue;
+      const plan = plans.find((x) => x.id === item.planId);
+      if (!plan) continue;
+      const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
+      const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
+      const subId = addSubscription({
+        studentId: student.id, planId: plan.id,
+        planSnapshot: {
+          name: plan.name, type: plan.type,
+          durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+          price: plan.price,
+        },
+        startAt: actualStartAt, endAt,
+        hoursRemaining: plan.hours,
+        countsRemaining: plan.counts,
+        paymentId: payId,
+        status: 'active',
+      });
+      subIds.push(subId);
+      if (endAt) runningLatestEnd = endAt;
+    }
+    markPendingOrderApplied(po.id, subIds, payId);
+    setPayStatus(`✅ 결제 완료 신호 수신 — 이용권 ${subIds.length}건 자동 활성화됨`);
+    setTimeout(() => setPayStatus(''), 6000);
+  }
+
   async function callCardPay(amount: number, merchant: 'main' | 'sub', tag: string): Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }> {
     if (!student) return { ok: false, error: 'no student' };
     setPayStatus(`${tag} 카드 결제 ${amount.toLocaleString()}원 — 단말기에 카드를 긁어주세요…`);
@@ -241,6 +345,13 @@ export function OpsMember() {
     if (!student) return;
     if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
     if (paidTotal !== orderTotal) return alert(`결제금액(${paidTotal.toLocaleString()})과 합계(${orderTotal.toLocaleString()})가 일치하지 않습니다.`);
+
+    // 결제선생 청구서 흐름: 다른 결제수단과 혼합 불가.
+    if (payments.some((p) => p.method === 'invoice')) {
+      if (payments.length > 1) return alert('결제선생 청구서는 다른 결제수단과 혼합할 수 없습니다.');
+      return processInvoice();
+    }
+
     setProcessing(true);
     try {
       const splits: PaymentSplit[] = [];
@@ -501,6 +612,88 @@ export function OpsMember() {
             </div>
           )}
         </section>
+
+        {/* 결제 대기 (결제선생 청구서) */}
+        {pendingOrders.filter((po) => po.studentId === student.id && po.status !== 'paid').length > 0 && (
+          <section className="card border-2 border-sky-200 bg-sky-50/50 p-6">
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="font-semibold text-sky-900">📧 결제 대기 (결제선생 청구서)</h3>
+              <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
+            </div>
+            <p className="mb-3 text-xs text-slate-600">
+              청구서를 발송했고 결제 완료 신호 대기 중. <b>모든 청구서가 결제 완료</b> 되어야 이용권이 자동 활성화됩니다.
+            </p>
+            <div className="space-y-3">
+              {pendingOrders
+                .filter((po) => po.studentId === student.id && po.status !== 'paid')
+                .map((po) => (
+                  <div key={po.id} className="rounded-md border border-sky-200 bg-white p-3">
+                    <div className="mb-2 flex items-center justify-between text-xs">
+                      <div>
+                        <span className="font-mono text-slate-500">{po.id.slice(0, 14)}…</span>
+                        <span className="ml-2 text-slate-700">
+                          총액 <b>{po.totalAmount.toLocaleString()}원</b> · {po.items.filter((i) => i.kind === 'plan').length}건
+                        </span>
+                      </div>
+                      <span className="text-slate-400">{fmtDateTime(new Date(po.createdAt))}</span>
+                    </div>
+                    <div className="mb-2 text-xs text-slate-600">
+                      {po.items.filter((i) => i.kind === 'plan').map((i) => i.name).join(' · ')}
+                    </div>
+                    <div className="space-y-1.5">
+                      {po.invoices.map((iv) => (
+                        <div key={iv.invoiceId} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1.5 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                              iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700'
+                            }`}>
+                              {iv.vendor === 'main' ? '메인 (독서실)' : '서브 (교습소)'}
+                            </span>
+                            <span className="font-mono text-slate-700">{iv.amount.toLocaleString()}원</span>
+                            {iv.url && (
+                              <a href={iv.url} target="_blank" rel="noreferrer" className="text-sky-600 underline">
+                                결제 페이지 →
+                              </a>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                              iv.status === 'paid' ? 'bg-emerald-200 text-emerald-800'
+                              : iv.status === 'cancelled' ? 'bg-rose-200 text-rose-800'
+                              : 'bg-amber-200 text-amber-800'
+                            }`}>
+                              {iv.status === 'paid' ? '✓ 결제 완료' : iv.status === 'cancelled' ? '취소' : '⏳ 대기 중'}
+                            </span>
+                            {iv.status === 'pending' && (
+                              <button
+                                className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
+                                onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
+                                title="시연용: 실제 환경에서는 결제선생 webhook 이 자동 호출"
+                              >✓ 결제 완료 처리 (시뮬)</button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 flex justify-end gap-2">
+                      {po.status !== 'cancelled' && (
+                        <button
+                          className="rounded bg-white px-2 py-1 text-[11px] text-rose-700 ring-1 ring-rose-300 hover:bg-rose-50"
+                          onClick={() => confirm('이 주문을 취소할까요? (이미 결제된 청구서는 별도 환불 필요)') && cancelPendingOrder(po.id)}
+                        >취소</button>
+                      )}
+                      {po.status === 'cancelled' && (
+                        <button
+                          className="rounded bg-slate-200 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-300"
+                          onClick={() => removePendingOrder(po.id)}
+                        >목록에서 삭제</button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
 
         {/* 3종 로그 */}
         <section className="card overflow-hidden">

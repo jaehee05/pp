@@ -45,6 +45,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ ok: false, error: 'Invalid JSON' });
   }
 
+  // 보안 검증: 가상계좌 deposit_callback / payment_status_changed 둘 다
+  // body 안에 secret 필드가 있을 수 있다. TOSS_WEBHOOK_SECRET 와 일치하는지 확인.
+  // (참고: 토스 deposit_callback 의 secret 은 가상계좌 생성 시 응답에 포함된 Payment.secret 값.
+  // 본 endpoint 에서는 환경변수에 저장된 단일 보안 키와 비교한다.)
+  const expected = process.env.TOSS_WEBHOOK_SECRET;
+  if (expected) {
+    const got =
+      (body as DepositCallback).secret ??
+      (body as StatusChangedEvent).data?.secret;
+    if (got && got !== expected) {
+      // eslint-disable-next-line no-console
+      console.warn('[toss webhook] secret mismatch — 가짜 호출 의심');
+      return res.status(401).json({ ok: false, error: 'invalid secret' });
+    }
+  }
+
   // 로깅 (Vercel function logs 에서 확인 가능)
   // eslint-disable-next-line no-console
   console.log('[toss webhook]', JSON.stringify(body));

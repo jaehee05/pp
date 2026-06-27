@@ -1,20 +1,32 @@
 import { PageHeader } from '../../components/PageHeader';
 import { useStudents } from '../../store/students';
-import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
+import { useSeats } from '../../lib/useSeats';
 
 export function Dashboard() {
   const students = useStudents((s) => s.list);
-  const att = useAttendance();
   const { subs } = usePlans();
+  const seats = useSeats();
 
-  const inCount = Object.values(att.state).filter((s) => s.state === 'in').length;
   const activeSubs = subs.filter((s) => s.status === 'active');
   const total = students.length;
   // 학생 1명이 여러 활성권(현재+예정 큐잉)을 가질 수 있어 단순 length 는 중복 카운트.
   // studentId 기준으로 dedupe.
   const usingCount = new Set(activeSubs.map((s) => s.studentId)).size;
   const idleCount = Math.max(0, total - usingCount);
+
+  // 좌석 통계: 배정된 좌석 = 이용중. tag 로 고정/자유 분류, type==='room' 은 스터디룸.
+  const seatsAll = seats.filter((s) => s.type === 'seat');
+  const seatsFixed = seatsAll.filter((s) => (s.tag ?? '').includes('고정'));
+  const seatsFree = seatsAll.filter((s) => (s.tag ?? '').includes('자유'));
+  const rooms = seats.filter((s) => s.type === 'room');
+  const used = (arr: typeof seats) => arr.filter((s) => !!s.assignedStudentId).length;
+  const seatStats = [
+    { l: '전체 좌석', total: seatsAll.length, used: used(seatsAll), unit: '석' },
+    { l: '고정석', total: seatsFixed.length, used: used(seatsFixed), unit: '석' },
+    { l: '자유석', total: seatsFree.length, used: used(seatsFree), unit: '석' },
+    { l: '스터디룸', total: rooms.length, used: used(rooms), unit: '룸' },
+  ];
 
   return (
     <>
@@ -45,13 +57,14 @@ export function Dashboard() {
         <div className="card p-5 lg:col-span-2">
           <h3 className="mb-4 font-semibold">좌석/룸 이용 현황</h3>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {[
-              { l: '전체 좌석', v: inCount, sub: `${Math.max(0, total - inCount)}석 잔여` },
-              { l: '고정석', v: inCount, sub: `${Math.max(0, total - inCount)}석 잔여` },
-              { l: '자유석', v: 0, sub: '0석 잔여' },
-              { l: '스터디룸', v: 0, sub: '0룸 잔여' },
-            ].map((d) => (
-              <Donut key={d.l} value={d.v} label={d.l} sub={d.sub} />
+            {seatStats.map((d) => (
+              <Donut
+                key={d.l}
+                value={d.used}
+                label={d.l}
+                unit={d.unit}
+                sub={`${Math.max(0, d.total - d.used)}${d.unit} 잔여 / 전체 ${d.total}${d.unit}`}
+              />
             ))}
           </div>
         </div>
@@ -91,7 +104,7 @@ export function Dashboard() {
   );
 }
 
-function Donut({ value, label, sub, big }: { value: number; label: string; sub: string; big?: boolean }) {
+function Donut({ value, label, sub, big, unit = '석' }: { value: number; label: string; sub: string; big?: boolean; unit?: string }) {
   const size = big ? 110 : 80;
   return (
     <div className="flex flex-col items-center">
@@ -100,7 +113,7 @@ function Donut({ value, label, sub, big }: { value: number; label: string; sub: 
         <div className="rounded-full bg-white"
           style={{ width: size * 0.65, height: size * 0.65 }} />
         <div className="absolute text-center text-sm font-bold text-brand-700">
-          {big ? label : `${value}석`}
+          {big ? label : `${value}${unit}`}
           {!big && <div className="text-[10px] font-medium text-slate-500">이용</div>}
         </div>
       </div>

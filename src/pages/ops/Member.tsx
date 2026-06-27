@@ -227,24 +227,28 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
-  // === 토스페이먼츠 결제 링크 발송 (메인+서브 각각 1건) ===
+  // === 토스페이먼츠 가상계좌 발급 (메인+서브 각각 1건) ===
   async function processInvoice() {
     if (!student) return;
     setProcessing(true);
-    setPayStatus('토스페이먼츠 결제 링크 발송 중…');
+    setPayStatus('토스페이먼츠 가상계좌 발급 중…');
     try {
-      const orderId = `ord_${student.id}_${Date.now().toString(36)}`;
-      const lines: { vendor: 'main' | 'sub'; amount: number }[] = [];
-      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main });
+      // orderId: 영문/숫자/-/_ 만 허용 (6~64자). student.id 영문화.
+      const safeStudentId = student.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
+      const orderId = `ord_${safeStudentId}_${Date.now().toString(36)}`;
+      const lines: { vendor: 'main' | 'sub'; amount: number; taxFreeAmount?: number }[] = [];
+      // 메인 = 면세 사업자 → 금액 전체를 taxFreeAmount 로 설정
+      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main, taxFreeAmount: vendorTotals.main });
       if (vendorTotals.sub > 0) lines.push({ vendor: 'sub', amount: vendorTotals.sub });
       const res = await sendInvoice({
         orderId,
         studentName: student.name,
         studentPhone: student.phone,
         lines,
+        validHours: 168, // 7일
       });
       if (!res.ok || !res.invoices) {
-        setPayStatus(`청구서 발송 실패: ${res.error ?? ''}`);
+        setPayStatus(`가상계좌 발급 실패: ${res.error ?? ''}`);
         return;
       }
       addPendingOrder({
@@ -254,13 +258,19 @@ export function OpsMember() {
         totalAmount: orderTotal,
         invoices: res.invoices.map((iv) => ({
           invoiceId: iv.invoiceId,
+          orderId: iv.orderId,
           vendor: iv.vendor,
           amount: iv.amount,
           status: 'pending' as const,
+          bank: iv.bank,
+          bankCode: iv.bankCode,
+          accountNumber: iv.accountNumber,
+          customerName: iv.customerName,
+          dueDate: iv.dueDate,
           url: iv.url,
         })),
       });
-      setPayStatus(`📧 토스 결제 링크 발송 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 결제 완료 시 자동 활성화됩니다.`);
+      setPayStatus(`📧 가상계좌 발급 완료 (메인 ${vendorTotals.main.toLocaleString()}원 / 서브 ${vendorTotals.sub.toLocaleString()}원). 양쪽 입금 확인 시 자동 활성화됩니다.`);
       setOrder([]);
       setPayments([{ method: 'card', amount: 0 }]);
     } catch (e) {
@@ -617,11 +627,11 @@ export function OpsMember() {
         {pendingOrders.filter((po) => po.studentId === student.id && po.status !== 'paid').length > 0 && (
           <section className="card border-2 border-sky-200 bg-sky-50/50 p-6">
             <div className="mb-3 flex items-center gap-2">
-              <h3 className="font-semibold text-sky-900">📧 결제 대기 (토스페이먼츠 결제 링크)</h3>
+              <h3 className="font-semibold text-sky-900">📧 결제 대기 (토스페이먼츠 가상계좌)</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
             <p className="mb-3 text-xs text-slate-600">
-              토스페이먼츠 결제 링크를 발송했고 완료 신호 대기 중. <b>모든 결제 링크가 결제 완료</b> 되어야 이용권이 자동 활성화됩니다.
+              가상계좌를 발급했고 입금 대기 중. <b>메인 + 서브 모두 입금 확인</b> 시 이용권이 자동 활성화됩니다.
             </p>
             <div className="space-y-3">
               {pendingOrders
@@ -642,36 +652,55 @@ export function OpsMember() {
                     </div>
                     <div className="space-y-1.5">
                       {po.invoices.map((iv) => (
-                        <div key={iv.invoiceId} className="flex items-center justify-between rounded bg-slate-50 px-2 py-1.5 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                              iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700'
-                            }`}>
-                              {iv.vendor === 'main' ? '메인 (독서실)' : '서브 (교습소)'}
-                            </span>
-                            <span className="font-mono text-slate-700">{iv.amount.toLocaleString()}원</span>
-                            {iv.url && (
-                              <a href={iv.url} target="_blank" rel="noreferrer" className="text-sky-600 underline">
-                                결제 페이지 →
-                              </a>
-                            )}
+                        <div key={iv.invoiceId} className="rounded bg-slate-50 p-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700'
+                              }`}>
+                                {iv.vendor === 'main' ? '메인 (독서실 / 면세)' : '서브 (교습소 / 과세)'}
+                              </span>
+                              <span className="font-mono font-semibold text-slate-800">{iv.amount.toLocaleString()}원</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
+                                iv.status === 'paid' ? 'bg-emerald-200 text-emerald-800'
+                                : iv.status === 'cancelled' ? 'bg-rose-200 text-rose-800'
+                                : 'bg-amber-200 text-amber-800'
+                              }`}>
+                                {iv.status === 'paid' ? '✓ 입금 완료' : iv.status === 'cancelled' ? '취소' : '⏳ 입금 대기'}
+                              </span>
+                              {iv.status === 'pending' && (
+                                <button
+                                  className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
+                                  onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
+                                  title="시연용: 실제 환경에서는 토스 webhook 으로 자동 갱신"
+                                >✓ 입금 처리 (시뮬)</button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                              iv.status === 'paid' ? 'bg-emerald-200 text-emerald-800'
-                              : iv.status === 'cancelled' ? 'bg-rose-200 text-rose-800'
-                              : 'bg-amber-200 text-amber-800'
-                            }`}>
-                              {iv.status === 'paid' ? '✓ 결제 완료' : iv.status === 'cancelled' ? '취소' : '⏳ 대기 중'}
-                            </span>
-                            {iv.status === 'pending' && (
+                          {iv.accountNumber && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                              <span><b>{iv.bank ?? ''}</b></span>
                               <button
-                                className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
-                                onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
-                                title="시연용: 실제 환경에서는 토스페이먼츠 webhook 이 자동 호출"
-                              >✓ 결제 완료 처리 (시뮬)</button>
-                            )}
-                          </div>
+                                type="button"
+                                className="font-mono font-bold text-slate-900 hover:bg-amber-100 hover:underline"
+                                title="클릭해 계좌번호 복사"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(iv.accountNumber ?? '');
+                                  setPayStatus('계좌번호가 복사되었습니다.');
+                                  setTimeout(() => setPayStatus(''), 2000);
+                                }}
+                              >{iv.accountNumber}</button>
+                              <span className="text-slate-500">예금주 <b>{iv.customerName ?? '-'}</b></span>
+                              {iv.dueDate && (
+                                <span className="text-rose-600">기한 {iv.dueDate.slice(0, 10)}</span>
+                              )}
+                              {iv.url && (
+                                <a href={iv.url} target="_blank" rel="noreferrer" className="text-sky-600 underline">영수증 →</a>
+                              )}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

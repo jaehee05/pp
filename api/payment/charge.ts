@@ -1,31 +1,33 @@
-// Vercel Node Serverless Function — 토스페이먼츠 결제 승인 프록시.
-// (단말기 카드 결제 흐름. 청구서 발송은 /api/payment/invoice 참조)
-// 환경변수 설정 시 실제 토스 호출, 미설정 시 mock(시연용).
+// 토스페이먼츠 결제 승인 (Confirm) 프록시.
+// SDK 결제창 인증 완료 후 success URL 콜백에서 호출.
+// paymentKey + orderId + amount → POST /v1/payments/confirm → Payment 객체.
 //
-// 필요한 환경변수:
-//   TOSS_SECRET_KEY              토스 시크릿 키
-//   TOSS_MERCHANT_MAIN_KEY       메인(독서실) 가맹점 키
-//   TOSS_MERCHANT_SUB_KEY        서브(교습소) 가맹점 키
-//   TOSS_BASE_URL                기본: https://api.tosspayments.com
+// 환경변수:
+//   TOSS_SECRET_KEY_MAIN  메인 가맹점 시크릿 키 (기본)
+//   TOSS_SECRET_KEY_SUB   서브 가맹점 시크릿 키
+//   TOSS_SECRET_KEY       단일 키 fallback
+//   TOSS_BASE_URL         기본: https://api.tosspayments.com
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-interface ChargeRequest {
-  amount: number;
-  installment?: number;        // 0 = 일시불
+interface ConfirmRequest {
+  paymentKey: string;
   orderId: string;
-  merchant?: 'main' | 'sub';   // 가맹점 분기
-  taxFree?: boolean;           // 면세 사업자 여부
+  amount: number;
+  merchant?: 'main' | 'sub'; // 어느 가맹점 시크릿 키를 쓸지
 }
 
-interface ChargeResult {
+interface ConfirmResult {
   ok: boolean;
   mock?: boolean;
-  approvalNo?: string;
-  issuer?: string;             // 카드사
-  cardNo?: string;             // 마스킹 번호
-  txId?: string;
-  approvedAt?: string;         // ISO 시각
+  paymentKey?: string;
+  orderId?: string;
+  status?: string;
+  approvedAt?: string;
+  totalAmount?: number;
+  card?: { issuerCode?: string; number?: string; approveNo?: string; installmentPlanMonths?: number };
+  method?: string;
+  receiptUrl?: string;
   error?: string;
   code?: string;
 }
@@ -33,79 +35,74 @@ interface ChargeResult {
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'Method not allowed' });
 
-  let body: ChargeRequest;
+  let body: ConfirmRequest;
   try {
     body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
   } catch {
     return res.status(400).json({ ok: false, error: 'Invalid JSON' });
   }
-  if (!body?.amount || body.amount <= 0) return res.status(400).json({ ok: false, error: 'amount > 0 required' });
+  if (!body?.paymentKey) return res.status(400).json({ ok: false, error: 'paymentKey required' });
   if (!body.orderId) return res.status(400).json({ ok: false, error: 'orderId required' });
+  if (!body.amount || body.amount <= 0) return res.status(400).json({ ok: false, error: 'amount > 0 required' });
 
   const env = process.env;
-  const apiKey = env.TOSS_SECRET_KEY;
-  const merchantMain = env.TOSS_MERCHANT_MAIN_KEY ?? '';
-  const merchantSub = env.TOSS_MERCHANT_SUB_KEY ?? '';
+  const secretMain = env.TOSS_SECRET_KEY_MAIN ?? env.TOSS_SECRET_KEY ?? '';
+  const secretSub = env.TOSS_SECRET_KEY_SUB ?? env.TOSS_SECRET_KEY ?? '';
   const baseUrl = env.TOSS_BASE_URL ?? 'https://api.tosspayments.com';
-  const merchantId = body.merchant === 'sub' ? merchantSub : merchantMain;
+  const secret = body.merchant === 'sub' ? secretSub : secretMain;
+  const useMock = !secret || secret.startsWith('dummy');
 
-  // --- Mock 모드 (실 키 미설정) ---
-  if (!apiKey || apiKey.startsWith('dummy')) {
-    await sleep(1500 + Math.random() * 1000); // 단말기 swipe 체감
-    const fail = body.amount > 99999999;       // 1억 초과 시 실패 시뮬
-    if (fail) {
-      return res.status(200).json({
-        ok: false, mock: true, code: 'F001',
-        error: '카드 한도 초과 (시연 모드)',
-      });
-    }
+  // --- Mock 모드 ---
+  if (useMock) {
+    await sleep(800 + Math.random() * 600);
     return res.status(200).json({
       ok: true, mock: true,
-      approvalNo: String(Math.floor(10000000 + Math.random() * 89999999)),
-      issuer: pickRandom(['신한카드', '삼성카드', 'KB국민카드', '현대카드', '하나카드']),
-      cardNo: `5***-****-****-${String(Math.floor(1000 + Math.random() * 9000))}`,
-      txId: `tx_mock_${Date.now()}`,
+      paymentKey: body.paymentKey,
+      orderId: body.orderId,
+      status: 'DONE',
       approvedAt: new Date().toISOString(),
-      code: '0000',
+      totalAmount: body.amount,
+      method: '카드',
+      card: {
+        issuerCode: pickRandom(['11', '12', '21', '24', '31']),
+        number: `5***-****-****-${String(Math.floor(1000 + Math.random() * 9000))}`,
+        approveNo: String(Math.floor(10000000 + Math.random() * 89999999)),
+        installmentPlanMonths: 0,
+      },
+      receiptUrl: 'https://mock.tosspayments.com/receipt',
     });
   }
 
-  // --- 실제 토스페이먼츠 호출 (시크릿 키 발급 받으면 활성) ---
-  // 토스는 client-side 위젯이 기본 흐름. 단말기 직접 호출용 endpoint 사용 시 아래 형태.
+  // --- 실제 토스 confirm ---
   try {
-    const authHeader = `Basic ${Buffer.from(`${apiKey}:`).toString('base64')}`;
+    const authHeader = `Basic ${Buffer.from(`${secret}:`).toString('base64')}`;
     const resp = await fetch(`${baseUrl}/v1/payments/confirm`, {
       method: 'POST',
-      headers: {
-        'Authorization': authHeader,
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Authorization': authHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        amount: body.amount,
+        paymentKey: body.paymentKey,
         orderId: body.orderId,
-        ...(merchantId ? { subMerchantKey: merchantId } : {}),
+        amount: body.amount,
       }),
     });
-    const data = await resp.json() as {
-      paymentKey?: string;
-      status?: string;
-      approvedAt?: string;
-      card?: { issuerCode?: string; number?: string; approveNo?: string };
-      message?: string;
-    };
-    if (!resp.ok || !data.paymentKey) {
+    const data = await resp.json() as TossPaymentResponse;
+    if (!resp.ok || data.status === 'ABORTED' || data.code) {
       return res.status(200).json({
         ok: false,
-        error: data.message ?? `HTTP ${resp.status}`,
+        code: data.code,
+        error: data.message ?? `토스 응답 오류 (${resp.status})`,
       });
     }
     return res.status(200).json({
       ok: true,
-      approvalNo: data.card?.approveNo,
-      issuer: data.card?.issuerCode,
-      cardNo: data.card?.number,
-      txId: data.paymentKey,
+      paymentKey: data.paymentKey,
+      orderId: data.orderId,
+      status: data.status,
       approvedAt: data.approvedAt,
+      totalAmount: data.totalAmount,
+      method: data.method,
+      card: data.card,
+      receiptUrl: data.receipt?.url,
     });
   } catch (e) {
     return res.status(500).json({
@@ -118,4 +115,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 function sleep(ms: number) { return new Promise((r) => setTimeout(r, ms)); }
 function pickRandom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
-export type { ChargeRequest, ChargeResult };
+interface TossPaymentResponse {
+  paymentKey?: string;
+  orderId?: string;
+  status?: string;
+  approvedAt?: string;
+  totalAmount?: number;
+  method?: string;
+  code?: string;
+  message?: string;
+  card?: { issuerCode?: string; number?: string; approveNo?: string; installmentPlanMonths?: number };
+  receipt?: { url?: string };
+}
+
+export type { ConfirmRequest, ConfirmResult };

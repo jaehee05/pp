@@ -7,13 +7,20 @@ type LocalPlan = Plan;
 type LocalSub = Omit<Subscription, 'startAt' | 'endAt'> & { startAt: number; endAt?: number };
 type LocalPay = Omit<Payment, 'createdAt' | 'approvedAt'> & { createdAt: number; approvedAt?: number };
 
-// 결제선생 청구서 단건 상태
+// 토스페이먼츠 가상계좌 단건 상태
 export interface InvoicePart {
-  invoiceId: string;          // 결제선생 청구서 ID (mock: inv_xxx)
-  vendor: 'main' | 'sub';     // 메인(독서실) / 서브(교습소)
+  invoiceId: string;          // 토스 paymentKey (mock 시 toss_mock_xxx)
+  orderId?: string;           // 토스 orderId (가맹점별 분리)
+  vendor: 'main' | 'sub';     // 메인(독서실, 면세) / 서브(교습소, 과세)
   amount: number;
   status: 'pending' | 'paid' | 'cancelled';
-  url?: string;               // 청구서 결제 페이지 URL (PaymentTeacher 응답)
+  // 가상계좌 정보 (학생이 입금할 계좌)
+  bank?: string;              // 은행 이름 (예: '우리')
+  bankCode?: string;          // 두 자리 코드
+  accountNumber?: string;
+  customerName?: string;
+  dueDate?: string;           // 입금 기한 ISO
+  url?: string;               // 영수증/결제 정보 URL
   paidAt?: number;
 }
 

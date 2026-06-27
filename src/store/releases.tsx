@@ -21,6 +21,35 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_014',
+    title: 'v1.0.14 — 토스페이먼츠 가상계좌 정식 연동',
+    date: '2026-06-27',
+    body: `## 변경
+- 토스페이먼츠 docs 기준으로 결제 코드 정정.
+- **청구서 = 가상계좌** 방식으로 정착 (\`POST /v1/virtual-accounts\`).
+  - 메인 / 서브 가맹점 각각 시크릿 키로 별도 호출 → 가상계좌 2건 발급.
+  - 학생 휴대폰으로 토스 자동 입금 안내 SMS 발송.
+  - 양쪽 입금 시 webhook → 이용권 자동 활성화.
+
+## 정정
+- 가맹점 2개 = **시크릿 키 2개**. 토스에 \`subMerchantKey\` 라는 개념 없음.
+- 환경변수 분리: \`TOSS_SECRET_KEY_MAIN\` / \`TOSS_SECRET_KEY_SUB\` (\`TOSS_SECRET_KEY\` 단일 키 fallback).
+- orderId 제약 (영문/숫자/-/_ 6~64자) 검증 + sanitize 추가.
+- 메인 (독서실) 가맹점은 면세 → \`taxFreeAmount\` 자동 설정.
+
+## 새 endpoint
+- \`/api/payment/charge\` → 토스 \`POST /v1/payments/confirm\` (SDK 결제창 인증 후 승인).
+- \`/api/payment/webhook\` → 토스 webhook 수신 endpoint (가상계좌 입금 / 결제 상태 변경).
+  - 토스 개발자센터 > 웹훅 등록: \`https://passplace.space/api/payment/webhook\`
+  - 현재는 로깅만; Firestore 실시간 갱신은 추가 작업 필요 (시뮬 버튼 유지).
+
+## UI
+- 결제 대기 패널에 **은행 / 계좌번호 / 예금주 / 입금기한** 표시.
+- 계좌번호 클릭 시 클립보드 복사.`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_013',
     title: 'v1.0.13 — 결제 PG 전환: 결제선생 → 토스페이먼츠',
     date: '2026-06-27',

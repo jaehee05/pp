@@ -107,7 +107,7 @@ const SECTIONS: Section[] = [
         <H>결제수단</H>
         <ul className="ml-5 list-disc">
           <li><b>카드</b>: 토스페이먼츠 API 호출 (현재 시연 모드 — 가짜 응답)</li>
-          <li><b>토스페이먼츠</b>: 메인/서브 결제 링크 2건 발송 → 양쪽 결제 완료 시 이용권 자동 활성화</li>
+          <li><b>토스페이먼츠</b>: 메인/서브 가상계좌 2건 발급 → 학생 휴대폰으로 입금 안내 자동 발송 → 양쪽 입금 완료 시 이용권 자동 활성화</li>
           <li><b>현금</b>: 단말기 없이 그냥 기록</li>
           <li><b>비대면 / 성남사랑</b>: 외부 결제 — 단말기 거치지 않고 기록만</li>
         </ul>
@@ -184,7 +184,7 @@ const SECTIONS: Section[] = [
         </Q>
         <Q q="결제 시 시연 모드로 동작">
           상단 노랑 띠 ("토스페이먼츠 시크릿 키 미설정") = 실제 결제 안 됨. 토스페이먼츠 가입 후
-          Vercel env <code>TOSS_SECRET_KEY</code> 등록하면 자동 전환.
+          Vercel env <code>TOSS_SECRET_KEY_MAIN</code> (독서실) / <code>TOSS_SECRET_KEY_SUB</code> (교습소) 등록하면 자동 전환.
         </Q>
         <Q q="알림톡이 mock으로만 응답">
           뿌리오 환경변수 확인 — 키/sender/proxy 모두 설정되어야. [관리 → 메시지 발송 관리 → 잔여 캐시/포인트]에서 테스트.

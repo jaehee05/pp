@@ -1,22 +1,36 @@
-// 토스페이먼츠 결제 링크 발송 클라이언트 (api/payment/invoice wrapper).
-export interface InvoiceLine { vendor: 'main' | 'sub'; amount: number; description?: string }
+// 토스페이먼츠 가상계좌 발급 클라이언트 (api/payment/invoice wrapper).
+export interface InvoiceLine {
+  vendor: 'main' | 'sub';
+  amount: number;
+  description?: string;
+  taxFreeAmount?: number;
+}
 export interface InvoiceRequest {
   orderId: string;
-  studentName?: string;
+  studentName: string;
   studentPhone?: string;
+  bank?: string;          // 두 자리 은행 코드 (예: '20'=우리, '04'=국민)
+  validHours?: number;    // 입금 기한 (기본 168 = 7일)
   lines: InvoiceLine[];
 }
 export interface InvoicePartResult {
   invoiceId: string;
+  orderId: string;
   vendor: 'main' | 'sub';
   amount: number;
-  url: string;
+  bank: string;           // 은행 이름 (예: '우리')
+  bankCode: string;       // 두 자리 코드
+  accountNumber: string;
+  customerName: string;
+  dueDate?: string;
+  url?: string;
 }
 export interface InvoiceResult {
   ok: boolean;
   mock?: boolean;
   invoices?: InvoicePartResult[];
   error?: string;
+  code?: string;
 }
 
 export async function sendInvoice(req: InvoiceRequest): Promise<InvoiceResult> {

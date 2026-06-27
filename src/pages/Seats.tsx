@@ -441,12 +441,21 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
           </aside>
         )}
 
-        <div className="flex-1 overflow-auto bg-slate-100 p-2 sm:p-6">
+        <div
+          className="flex-1 overflow-auto bg-slate-100 p-2 sm:p-6"
+          onClick={(e) => {
+            // 좌석 / 캔버스 외부 (회색 여백) 클릭 시 선택 해제 + 컨텍스트 메뉴 닫기
+            if (e.target === e.currentTarget) {
+              setSelectedId(null);
+              setCtxMenu(null);
+            }
+          }}
+        >
           <div
             ref={canvasRef}
             onClick={(e) => {
               if (paletteDrag) dropFromPalette(e);
-              else if (e.target === canvasRef.current) setSelectedId(null);
+              else if (e.target === canvasRef.current) { setSelectedId(null); setCtxMenu(null); }
             }}
             onMouseMove={onMouseMove}
             onMouseUp={onMouseUp}

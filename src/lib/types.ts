@@ -87,8 +87,6 @@ export interface Plan {
   kind?: string;                // 회원 구분 (일반/학생/성인 등)
   vendor?: 'main' | 'sub';      // 결제 사업자 (메인=합격공간 독서실 / 서브=합격공간 진학지도교습소). 기본 main
   discountPolicy?: string;      // 할인정책 라벨 (예: "분두 1과목 할인(5%)")
-  allowedDiscountTiers?: string[]; // 노출 대상 할인 등급 (예: ['1과목']). 빈 배열/미정의 = 전체 노출
-  availableMonths?: number[];      // 노출되는 월 (1-12). 미정의/12개 전부 = 항상 노출. 예: 방학권=[7,8]
   includesLocker?: boolean;     // 사물함 포함 여부
 
   active: boolean;

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { Modal } from '../../components/Modal';
-import { useStudents, DISCOUNT_TIERS, type DiscountTier } from '../../store/students';
+import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
@@ -129,18 +129,6 @@ export function OpsMember() {
     const lastEnd = lastActiveEndOf(subs, student.id);
     return lastEnd ? nextDayStart(lastEnd) : Date.now();
   }, [subs, student?.id]);
-  const startMonth = new Date(projectedStartTs).getMonth() + 1; // 1-12
-
-  // 이번 startMonth 가 "시즌 제한 월"인지 — 시즌 제한이 걸린 이용권 중 startMonth 를 포함하는 게 있으면 그렇다.
-  const seasonalPlansThisMonth = useMemo(() => plans.filter((p) =>
-    p.category === 'seat' && p.active && !p.hidden
-    && p.availableMonths && p.availableMonths.length > 0 && p.availableMonths.length < 12
-    && p.availableMonths.includes(startMonth),
-  ), [plans, startMonth]);
-  const isSeasonRestricted = seasonalPlansThisMonth.length > 0;
-  const seasonName = ([7, 8].includes(startMonth) ? '여름방학'
-    : [12, 1, 2].includes(startMonth) ? '겨울방학'
-    : '시즌');
 
   // 시작일 자동 세팅: 사용자가 직접 안 건드렸으면 projectedStartTs 로 동기화.
   // 이전 이용권 있으면 만료일 다음날, 없으면 오늘.
@@ -154,17 +142,8 @@ export function OpsMember() {
     if (!p.active) return false;
     if (!showHidden && p.hidden) return false;
     if (planSeatType && p.seatType !== planSeatType) return false;
-    // 노출 대상 할인 등급 필터: 비어있으면 모두 노출, 지정 시 학생의 등급과 일치해야
-    const allowed = p.allowedDiscountTiers;
-    if (allowed && allowed.length > 0) {
-      const tier = student?.discountTier ?? '없음';
-      if (!allowed.includes(tier)) return false;
-    }
-    // 월 필터: undefined = 항상, length<12 = 시즌 제한 → 시작 예정월이 포함돼야
-    const months = p.availableMonths;
-    if (months !== undefined && months.length < 12 && !months.includes(startMonth)) return false;
     return true;
-  }), [plans, planSeatType, showHidden, student?.discountTier, startMonth]);
+  }), [plans, planSeatType, showHidden]);
 
   function addPlanToOrder() {
     if (!selectedPlanId) return alert('이용권을 선택하세요.');
@@ -427,12 +406,6 @@ export function OpsMember() {
                 <option value="adult">성인</option>
               </select>
             </Field>
-            <Field label="할인 대상" col={3}>
-              <select className="input" value={v?.discountTier ?? '없음'} disabled={!editMode}
-                onChange={(e) => setDraftField('discountTier', e.target.value as DiscountTier)}>
-                {DISCOUNT_TIERS.map((t) => <option key={t} value={t}>{t}</option>)}
-              </select>
-            </Field>
             <Field label="사물함" col={3}>
               <input className="input" value={v?.lockerId ?? ''} placeholder="없음" readOnly={!editMode}
                 onChange={(e) => setDraftField('lockerId', e.target.value)} />
@@ -594,20 +567,7 @@ export function OpsMember() {
 
         {/* 이용권 선택 */}
         <section className="card p-6">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <h3 className="font-semibold">이용권 선택</h3>
-            <span className="rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">
-              💡 할인 혜택 적용 이용권은 [회원수정] → [할인 대상] 에서 학생의 과목 수
-              (1과목 / 2과목이상)를 먼저 지정해야 노출됩니다.
-              현재 학생: <b>{student?.discountTier ?? '없음'}</b>
-            </span>
-            {isSeasonRestricted && (
-              <span className="rounded-md bg-sky-50 px-2 py-1 text-[11px] text-sky-700">
-                📅 <b>{startMonth}월</b>은 <b>{seasonName}</b>으로, <b>{seasonName} 이용권</b>만 이용 가능합니다.
-                (일반 이용권은 자동 숨김)
-              </span>
-            )}
-          </div>
+          <h3 className="mb-3 font-semibold">이용권 선택</h3>
           <div className="grid grid-cols-1 gap-y-3 md:grid-cols-12 md:gap-x-4 text-sm">
             <Field label="좌석타입" col={3}>
               <select className="input" value={planSeatType}

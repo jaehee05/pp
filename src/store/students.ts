@@ -14,11 +14,7 @@ type LocalStudent = Omit<Student, 'joinedAt' | 'pointsTotal'> & {
   parentMsgReceive?: boolean;   // 학부모 메시지 수신
   lockerId?: string;
   shoeId?: string;
-  discountTier?: DiscountTier;  // 할인 대상 (이용권 노출 필터링용)
 }
-
-export type DiscountTier = '없음' | '1과목' | '2과목이상';
-export const DISCOUNT_TIERS: DiscountTier[] = ['없음', '1과목', '2과목이상'];
 
 interface State {
   list: LocalStudent[];
@@ -26,6 +22,23 @@ interface State {
   update: (id: string, patch: Partial<LocalStudent>) => void;
   remove: (id: string) => void;
   get: (id: string) => LocalStudent | undefined;
+}
+
+// 레거시 discountTier 필드 → 메모로 이전. 1회 실행 (hydration merge 단계).
+// "없음" 은 그냥 폐기. 그 외 값은 "할인 대상: X" 형태로 memo 에 prepend (중복 방지).
+function migrateDiscountTier(list: LocalStudent[]): LocalStudent[] {
+  return list.map((s) => {
+    const legacy = (s as unknown as { discountTier?: string }).discountTier;
+    if (!legacy) return s;
+    const stripped = { ...(s as Record<string, unknown>) };
+    delete stripped.discountTier;
+    if (legacy === '없음') return stripped as LocalStudent;
+    const tag = `할인 대상: ${legacy}`;
+    const memo = (s.memo ?? '').trim();
+    if (memo.includes(tag)) return stripped as LocalStudent;
+    const newMemo = memo ? `${tag}\n${memo}` : tag;
+    return { ...(stripped as LocalStudent), memo: newMemo };
+  });
 }
 
 export const useStudents = create<State>()(
@@ -48,7 +61,15 @@ export const useStudents = create<State>()(
       remove: (id) => set((st) => ({ list: st.list.filter((x) => x.id !== id) })),
       get: (id) => get().list.find((x) => x.id === id),
     }),
-    { name: 'pp.students.v1', storage: createJSONStorage(() => firestoreStorage) },
+    {
+      name: 'pp.students.v1',
+      storage: createJSONStorage(() => firestoreStorage),
+      merge: (persisted, current) => {
+        const p = persisted as State | undefined;
+        if (!p || !Array.isArray(p.list)) return current;
+        return { ...current, list: migrateDiscountTier(p.list) };
+      },
+    },
   ),
 );
 
@@ -67,7 +88,6 @@ export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTo
     memberState: 'normal',
     msgReceive: true,
     parentMsgReceive: true,
-    discountTier: '없음',
     notify: {
       studentEnterExit: true,
       parentEnterExit: true,

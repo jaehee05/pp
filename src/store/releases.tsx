@@ -224,11 +224,16 @@ export const useReleases = create<State>()(
     {
       name: 'pp.releases.v1',
       storage: createJSONStorage(() => firestoreStorage),
-      // SEED 는 첫 로드 한 번만 — 사용자가 수정한 뒤 SEED 가 자동 덮어쓰지 않게 빈 list 도 보존.
+      // 사용자가 편집한 항목(persisted)을 우선시하면서, 그 사이 SEED 에 새로 추가된 릴리즈는 합쳐넣는다.
+      // 같은 slug 면 persisted 가 이김 → 사용자 편집 보존.
+      // SEED 에만 있는 새 슬러그 → 자동 추가 (배포 후 새 릴리즈 노출).
       merge: (persisted, current) => {
         const p = persisted as State | undefined;
         if (!p || !Array.isArray(p.list)) return current;
-        return { ...current, list: p.list };
+        const persistedSlugs = new Set(p.list.map((x) => x.slug));
+        const fresh = SEED.filter((s) => !persistedSlugs.has(s.slug));
+        const combined = [...fresh, ...p.list].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
+        return { ...current, list: combined };
       },
     },
   ),

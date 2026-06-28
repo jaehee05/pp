@@ -226,6 +226,47 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
+  // === 비대면 / 성남사랑 결제 (수동 확인) ===
+  // 결제하기 누르면 PendingOrder 로 보관 → 운영자가 [✓ 결제 완료 처리] 직접 클릭해야 활성화.
+  // 추후 외부 결제 API 연동되면 자동 paid 처리되도록 바꿀 자리 (지금은 수동 단계).
+  // (지역상품권 QR 흐름과 동일한 인프라 재사용 — invoice.method 로 구분)
+  async function processExternalPending(method: 'remote' | 'localpay' | 'mixed') {
+    if (!student) return;
+    setProcessing(true);
+    const label = method === 'remote' ? '비대면' : method === 'localpay' ? '성남사랑' : '비대면/성남사랑';
+    setPayStatus(`${label} 결제 대기 등록 중…`);
+    try {
+      const safeStudentId = student.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
+      const orderId = `ord_${safeStudentId}_${Date.now().toString(36)}`;
+      const externalSplits = payments.filter((p) => (p.method === 'remote' || p.method === 'localpay') && p.amount > 0);
+      addPendingOrder({
+        studentId: student.id,
+        studentName: student.name,
+        items: order,
+        totalAmount: orderTotal,
+        invoices: externalSplits.map((p, i) => ({
+          invoiceId: `ext_${orderId}_${p.method}_${i}`,
+          orderId,
+          vendor: 'main' as const,    // 외부 결제는 vendor 의미 없음 — UI 에서는 method 라벨로 표시
+          method: p.method as 'remote' | 'localpay',
+          amount: p.amount,
+          status: 'pending' as const,
+        })),
+      });
+      const breakdown = externalSplits
+        .map((p) => `${p.method === 'remote' ? '비대면' : '성남사랑'} ${p.amount.toLocaleString()}원`)
+        .join(' / ');
+      setPayStatus(`📋 ${label} 결제 대기 등록 완료 (${breakdown}). 결제 완료되면 [✓ 결제 완료 처리] 눌러주세요. (추후 API 연동 시 자동 처리)`);
+      setOrder([]);
+      setPayments([{ method: 'card', amount: 0 }]);
+    } catch (e) {
+      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setPayStatus(''), 8000);
+    }
+  }
+
   // === 지역상품권 QR 결제 (수동 확인) ===
   // 학생이 지역상품권 앱에서 메인/서브 가맹점 QR 을 각각 스캔해 결제하면,
   // 운영자가 결제 확인 후 수동으로 [✓ 결제 완료 처리] 클릭 → 양쪽 완료 시 자동 활성화.
@@ -279,11 +320,13 @@ export function OpsMember() {
   function applyPendingOrder(po: typeof pendingOrders[number]) {
     if (!student || po.studentId !== student.id) return;
     if (po.appliedSubIds) return;
+    // PendingOrder 의 첫 invoice method 를 결제수단으로 사용 (legacy: undefined → 'invoice').
+    const primaryMethod = (po.invoices[0]?.method ?? 'invoice') as PayMethod;
     const payId = addPayment({
       studentId: student.id,
       planId: po.items.find((i) => i.kind === 'plan')?.planId ?? 'multi',
       amount: po.totalAmount,
-      method: 'invoice',
+      method: primaryMethod,
       cardApprovalNo: po.invoices.map((iv) => iv.invoiceId).join('/'),
       terminalTxId: po.id,
       status: 'approved',
@@ -343,6 +386,20 @@ export function OpsMember() {
     if (payments.some((p) => p.method === 'invoice')) {
       if (payments.length > 1) return alert('지역상품권 QR 결제는 다른 결제수단과 혼합할 수 없습니다.');
       return processInvoice();
+    }
+
+    // 비대면 / 성남사랑 흐름: 외부 API 결제 완료 신호 대기 — PendingOrder 로 보관.
+    // 카드/현금 혼합 금지 (혼합 시 일부만 즉시 처리되어 혼란).
+    const hasExternal = payments.some((p) => p.method === 'remote' || p.method === 'localpay');
+    if (hasExternal) {
+      const allExternal = payments.every((p) => p.amount === 0 || p.method === 'remote' || p.method === 'localpay');
+      if (!allExternal) return alert('비대면/성남사랑 결제는 카드/현금과 혼합할 수 없습니다.');
+      const methods = new Set(payments.filter((p) => p.amount > 0).map((p) => p.method));
+      const tag: 'remote' | 'localpay' | 'mixed' =
+        methods.size === 1
+          ? (methods.has('remote') ? 'remote' : 'localpay')
+          : 'mixed';
+      return processExternalPending(tag);
     }
 
     setProcessing(true);
@@ -606,16 +663,17 @@ export function OpsMember() {
           )}
         </section>
 
-        {/* 결제 대기 (지역상품권 QR 결제) */}
+        {/* 결제 대기 (지역상품권 QR / 비대면 / 성남사랑) */}
         {pendingOrders.filter((po) => po.studentId === student.id && po.status !== 'paid').length > 0 && (
           <section className="card border-2 border-sky-200 bg-sky-50/50 p-6">
             <div className="mb-3 flex items-center gap-2">
-              <h3 className="font-semibold text-sky-900">📋 결제 대기 (지역상품권 QR)</h3>
+              <h3 className="font-semibold text-sky-900">📋 결제 대기</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
             <p className="mb-3 text-xs text-slate-600">
-              지역상품권 QR 결제 대기 중. 학생이 메인/서브 가맹점 QR 각각 결제 완료하면
-              운영자가 <b>[✓ 결제 완료 처리]</b> 를 눌러주세요. <b>양쪽 모두 완료</b> 시 이용권이 자동 활성화됩니다.
+              외부 결제 (지역상품권 QR / 비대면 / 성남사랑) 대기 중. 결제 완료되면
+              운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러주세요. <b>모든 결제 완료</b> 시 이용권이 자동 활성화됩니다.
+              <span className="ml-1 text-slate-400">(비대면/성남사랑은 추후 API 연동 시 자동 처리 예정)</span>
             </p>
             <div className="space-y-3">
               {pendingOrders
@@ -635,14 +693,26 @@ export function OpsMember() {
                       {po.items.filter((i) => i.kind === 'plan').map((i) => i.name).join(' · ')}
                     </div>
                     <div className="space-y-1.5">
-                      {po.invoices.map((iv) => (
+                      {po.invoices.map((iv) => {
+                        const isRemote = iv.method === 'remote';
+                        const isLocalpay = iv.method === 'localpay';
+                        const isExternal = isRemote || isLocalpay;
+                        const badgeCls = isRemote
+                          ? 'bg-amber-100 text-amber-700'
+                          : isLocalpay
+                            ? 'bg-orange-100 text-orange-700'
+                            : iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700';
+                        const badgeLabel = isRemote
+                          ? '비대면'
+                          : isLocalpay
+                            ? '성남사랑'
+                            : iv.vendor === 'main' ? '메인 (독서실 / 면세)' : '서브 (교습소 / 과세)';
+                        return (
                         <div key={iv.invoiceId} className="rounded bg-slate-50 p-2 text-xs">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${
-                                iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700'
-                              }`}>
-                                {iv.vendor === 'main' ? '메인 (독서실 / 면세)' : '서브 (교습소 / 과세)'}
+                              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold ${badgeCls}`}>
+                                {badgeLabel}
                               </span>
                               <span className="font-mono font-semibold text-slate-800">{iv.amount.toLocaleString()}원</span>
                             </div>
@@ -658,7 +728,7 @@ export function OpsMember() {
                                 <button
                                   className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
                                   onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
-                                  title="해당 가맹점 지역상품권 QR 결제가 확인되면 클릭"
+                                  title={isExternal ? '비대면/성남사랑 결제 완료되면 직접 클릭 (추후 API 자동화 예정)' : '해당 가맹점 지역상품권 QR 결제가 확인되면 클릭'}
                                 >✓ 결제 완료 처리</button>
                               )}
                             </div>
@@ -686,7 +756,8 @@ export function OpsMember() {
                             </div>
                           )}
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <div className="mt-2 flex justify-end gap-2">
                       {po.status !== 'cancelled' && (
@@ -926,7 +997,7 @@ export function OpsMember() {
                 </div>
                 {external && (
                   <div className="text-[11px] text-amber-700 sm:col-span-12 sm:pl-12">
-                    ℹ️ 외부 결제 — 단말기 거치지 않고 기록만. 금액 0원으로 두면 영수 카운트 안 됨.
+                    ℹ️ [결제하기] 누르면 <b>결제 대기 상태</b>로 보관. 운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러야 이용권이 활성화됩니다. (추후 외부 결제 API 연동 시 자동 처리 / 카드·현금 혼합 불가)
                   </div>
                 )}
               </li>
@@ -944,7 +1015,11 @@ export function OpsMember() {
             disabled={processing || order.length === 0 || paidTotal !== orderTotal}
             onClick={processPayment}
           >
-            {processing ? '처리 중…' : '결제하기'}
+            {processing
+              ? '처리 중…'
+              : payments.some((p) => (p.method === 'remote' || p.method === 'localpay' || p.method === 'invoice') && p.amount > 0)
+                ? '결제 대기 등록'
+                : '결제하기'}
           </button>
           {payStatus && (
             <div className={`mt-3 rounded-md p-3 text-sm ${

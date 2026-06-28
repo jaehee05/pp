@@ -11,7 +11,10 @@ type LocalPay = Omit<Payment, 'createdAt' | 'approvedAt'> & { createdAt: number;
 export interface InvoicePart {
   invoiceId: string;          // 토스 paymentKey (mock 시 toss_mock_xxx)
   orderId?: string;           // 토스 orderId (가맹점별 분리)
-  vendor: 'main' | 'sub';     // 메인(독서실, 면세) / 서브(교습소, 과세)
+  vendor: 'main' | 'sub';     // 메인(독서실, 면세) / 서브(교습소, 과세). 비대면/성남사랑은 의미 없음 — 'main' 기본값.
+  // 'invoice'(기본) = 지역상품권 QR, 'remote' = 비대면, 'localpay' = 성남사랑.
+  // 추후 외부 결제 API 연동 시 자동으로 paid 처리 — 지금은 운영자가 수동으로 paid 처리.
+  method?: 'invoice' | 'remote' | 'localpay';
   amount: number;
   status: 'pending' | 'paid' | 'cancelled';
   // 가상계좌 정보 (학생이 입금할 계좌)

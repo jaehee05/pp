@@ -34,7 +34,8 @@ export interface Student {
   fingerprintId?: string;
 
   // 좌석/이용권은 다른 컬렉션에서 조회
-  status: 'active' | 'paused' | 'left';
+  // 'active' = 정상회원, 'leaving' = 퇴원 예정 (배치도에 표시), 'paused' = 일시정지, 'left' = 퇴실
+  status: 'active' | 'leaving' | 'paused' | 'left';
   joinedAt: TS;
   pointsTotal: number; // 누적 상-벌점 합
 }

@@ -783,6 +783,11 @@ function SeatBox({
                 </span>
               )}
             </div>
+            {student.status === 'leaving' && (
+              <div className="truncate px-1.5 pb-0.5 text-[10px] italic leading-none text-slate-400">
+                퇴원 예정
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex-1 bg-white" />

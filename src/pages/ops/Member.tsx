@@ -548,7 +548,26 @@ export function OpsMember() {
             </Field>
 
             <Field label="" col={2}>
-              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50" disabled>정상회원</button>
+              {(() => {
+                const isLeaving = student.status === 'leaving';
+                const label = isLeaving ? '퇴원 예정' : '정상회원';
+                const cls = isLeaving
+                  ? 'rounded-md bg-amber-50 px-3 py-1.5 text-sm font-semibold text-amber-700 ring-1 ring-amber-300 hover:bg-amber-100'
+                  : 'rounded-md bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-300 hover:bg-emerald-100';
+                const title = isLeaving ? '클릭해 정상회원으로 되돌리기' : '클릭해 퇴원 예정으로 변경';
+                return (
+                  <button
+                    className={cls + ' disabled:opacity-50 disabled:cursor-not-allowed'}
+                    disabled={editMode}
+                    title={title}
+                    onClick={() => {
+                      const next = isLeaving ? 'active' : 'leaving';
+                      const msg = isLeaving ? '정상회원 상태로 되돌릴까요?' : '퇴원 예정 상태로 변경할까요?';
+                      if (confirm(msg)) update(student.id, { status: next });
+                    }}
+                  >{label}</button>
+                );
+              })()}
             </Field>
             <Field label="" col={2}>
               <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"

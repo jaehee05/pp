@@ -162,6 +162,7 @@ function StudentFormModal({
         <label>상태
           <select className="input mt-1" value={v.status} onChange={(e) => setV({ ...v, status: e.target.value as LocalStudent['status'] })}>
             <option value="active">이용중</option>
+            <option value="leaving">퇴원 예정</option>
             <option value="paused">일시정지</option>
             <option value="left">퇴실</option>
           </select>

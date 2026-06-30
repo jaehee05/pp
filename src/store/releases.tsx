@@ -21,6 +21,109 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_021',
+    title: 'v1.0.21 — 1개월권 = 캘린더 기준 + 좌석 배정 가드',
+    date: '2026-07-01',
+    body: `## 변경 — 1개월권 만료일 계산
+- **\`Plan.durationMonths\` 추가**. 1개월권은 이제 시작 월의 마지막 날까지.
+  - 7/1 + 1개월 → 7/31 (기존 7/30)
+  - 6/1 + 1개월 → 6/30
+  - 2/1 + 1개월 → 2/28 (윤년 2/29)
+  - 다음 달에 같은 day 가 없으면 (예: 1/31 + 1개월) 그 월 마지막 날로 클램프.
+- 마이그레이션: 기존 \`durationDays\` ∈ {30, 60, 90, 180, 365} 이고 이름에 "개월/달" 포함된 이용권은 자동으로 \`durationMonths\` 로 변환.
+- admin 이용권 편집기에 **기간 단위 (개월/일) 셀렉터** 추가.
+
+## 변경 — 좌석 배정 흐름
+- **활성 이용권 없는 회원은 좌석 배정 불가**.
+  - 배치도 우클릭 → "학생 배정" 모달에서 '신규 구매' 탭 제거.
+  - 활성 이용권 없으면 안내 박스 + 배정 버튼 비활성.
+- **이용권 구매 직후 좌석 자동 안내**: 회원정보에서 결제 완료(현금/카드/외부) 후 학생에게 배정된 좌석이 없으면 좌석 선택 모달 자동 오픈 → 빈 좌석 클릭으로 즉시 배정.
+
+## 내부
+- \`lib/sub.computeEndAt(startAt, opts)\` 단일 진입점. \`durationMonths\` 우선.
+- \`lib/useSeats.assignSeatToStudent(seatId, studentId)\` 외부 호출용 헬퍼.`,
+    createdAt: Date.parse('2026-07-01'),
+    updatedAt: Date.parse('2026-07-01'),
+  },
+  {
+    slug: 'v1_020',
+    title: 'v1.0.20 — KST 날짜 고정 + 페이스패스 그라운드워크',
+    date: '2026-07-01',
+    body: `## 버그 수정
+- **이용권이 있는데 "이용 안함"으로 표시되던 문제 수정**.
+  - 브라우저 timezone 이 KST 가 아닐 때 시작일이 미래로 계산돼 \`currentSubOf\` 가 "시작 예정"으로 잘못 분류.
+  - \`fromLocalISODate / toLocalISODate / ddayOf / nextDayStart / expiryShort\` 모두 **KST(UTC+9) 기준** 으로 통일 — 브라우저 TZ 무관.
+
+## 새 기능 — 페이스패스 (Toss FacePass) 출입 그라운드워크
+- \`Student.faceId\` 필드 추가 (지문과 병존).
+- 회원정보 페이지에 **😊 페이스패스 등록/삭제** 버튼.
+- 신규 endpoint:
+  - \`/api/facepass/enroll\` — Toss Front 단말의 plugin 이 얼굴 등록 완료 시 POST → faceId 채워줌.
+  - \`/api/facepass/identify\` — 인증 완료 시 POST → 출입 토글 (source='face', 5초 dedupe).
+- \`deviceAgent\` 에 \`enroll_face\` / \`identify_face\` 메시지 + mock 시뮬레이션.
+- \`AttendanceLog.source\` 에 \`'face'\` 추가.
+- 실제 통합 미완 — 토스플레이스 가맹점 등록 + Toss Front 단말 도입 + Plugin SDK 시그니처 확정 후 보강.`,
+    createdAt: Date.parse('2026-07-01'),
+    updatedAt: Date.parse('2026-07-01'),
+  },
+  {
+    slug: 'v1_019',
+    title: 'v1.0.19 — 토스플레이스 카드 결제 + 외부 변경 자동 반영',
+    date: '2026-06-27',
+    body: `## 변경 — 카드 결제 = 토스플레이스 단말기
+- **카드 결제 → 토스플레이스 (Toss Place)** 로 전환. 기존 토스페이먼츠 SDK 결제창 / 로컬 bridge 단말기 경로 폐기.
+- [결제하기] → **PendingOrder 등록 (메인/서브 각각 invoice)**. 단말기에서 결제 완료되면 토스플레이스 \`payment.payment.approved.v1\` 웹훅으로 자동 활성화.
+- 카드는 다른 수단과 혼합 결제 불가.
+- 현금 단독은 즉시 처리 흐름 (\`processCashImmediate\`) 으로 분리.
+
+## 신규 endpoint
+- \`/api/payment/tossplace-webhook\`:
+  - HMAC-SHA256 시그니처 검증 (\`v1=hex\`, timestamp 5분 윈도우)
+  - \`x-toss-webhook-id\` 멱등 (\`tossplaceWebhooks/{id}\`)
+  - \`firebase-admin\` 으로 \`appState/pp.plans.v1\` JSON 직접 갱신 → \`invoice.orderId\` 매칭된 건 paid 처리.
+
+## 개선 — 외부 변경 자동 반영
+- 웹훅이 Firestore 만 갱신하면 클라이언트가 알지 못해 새로고침이 필요했던 문제 해결.
+- \`firestoreStorage.subscribeExternalUpdates(name, rehydrate)\` 헬퍼 추가 — Firestore \`onSnapshot\` + \`metadata.hasPendingWrites\` 로 자기 write echo 와 외부 변경 분리 → 외부 변경 시 자동 \`persist.rehydrate()\`.
+- plans / students / attendance 모두 적용.
+
+## 환경
+- \`TOSSPLACE_WEBHOOK_SECRET\`, \`FIREBASE_PROJECT_ID\`, \`GOOGLE_APPLICATION_CREDENTIALS_JSON\` 추가.`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
+    slug: 'v1_018',
+    title: 'v1.0.18 — 정상회원 ↔ 퇴원 예정 토글',
+    date: '2026-06-27',
+    body: `## 새 기능
+- 회원정보 페이지의 [정상회원] 버튼이 **토글 버튼**으로 — 클릭 시 confirm 후 정상회원/퇴원 예정 전환.
+- 퇴원 예정 회원은 운영 배치도 좌석 카드의 이름 줄 아래에 **회색 이탤릭 "퇴원 예정"** 표시.
+- 어드민 회원 폼 select 에도 "퇴원 예정" 옵션 추가.
+
+## 내부
+- \`Student.status\` union 에 \`'leaving'\` 추가 (기존 active/paused/left 유지).`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
+    slug: 'v1_017',
+    title: 'v1.0.17 — 비대면/성남사랑 결제 대기 → 수동 완료',
+    date: '2026-06-27',
+    body: `## 변경
+- **비대면 / 성남사랑** 결제 클릭 시 즉시 활성화 X → **결제 대기 (PendingOrder)** 로 보관.
+- 운영자가 결제 확인 후 [✓ 결제 완료 처리] 직접 클릭해야 이용권 활성화.
+- 다른 결제수단과 혼합 불가 (지역상품권 QR 정책과 동일).
+
+## 내부
+- 기존 지역상품권 QR PendingOrder 인프라 재사용.
+- \`InvoicePart.method\` union 에 \`'remote' | 'localpay'\` 추가.
+- \`applyPendingOrder\` 의 method 하드코딩 제거 — invoice 의 method 사용.
+- 추후 외부 결제 API 연동 시 자동 처리로 전환할 자리 (현재는 수동).`,
+    createdAt: Date.parse('2026-06-27'),
+    updatedAt: Date.parse('2026-06-27'),
+  },
+  {
     slug: 'v1_016',
     title: 'v1.0.16 — 채널톡 상담 버튼 + 회원정보 연동',
     date: '2026-06-27',

@@ -690,19 +690,10 @@ export function OpsMember() {
               <h3 className="font-semibold text-sky-900">📋 결제 대기</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
-            <div className="mb-3 flex items-start justify-between gap-2">
-              <p className="text-xs text-slate-600">
-                결제 대기 (카드 단말기 / 지역상품권 QR / 비대면 / 성남사랑). <b>카드</b>는 단말기 결제 시 토스플레이스 웹훅으로 자동 처리,
-                나머지는 운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러주세요. <b>모든 결제 완료</b> 시 이용권이 자동 활성화됩니다.
-                <span className="ml-1 text-slate-400">(웹훅으로 결제 반영된 직후 화면에 안 보이면 [🔄 새로고침] 클릭)</span>
-              </p>
-              <button
-                type="button"
-                className="shrink-0 rounded bg-white px-2 py-1 text-[11px] ring-1 ring-slate-300 hover:bg-slate-50"
-                onClick={() => { void usePlans.persist.rehydrate(); }}
-                title="Firestore 에서 결제 대기 상태를 다시 읽어옴 (웹훅 처리 직후 자동 반영 안 될 때)"
-              >🔄 새로고침</button>
-            </div>
+            <p className="mb-3 text-xs text-slate-600">
+              결제 대기 (카드 단말기 / 지역상품권 QR / 비대면 / 성남사랑). <b>카드</b>는 단말기 결제 시 토스플레이스 웹훅으로 자동 처리,
+              나머지는 운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러주세요. <b>모든 결제 완료</b> 시 이용권이 자동 활성화됩니다.
+            </p>
             <div className="space-y-3">
               {pendingOrders
                 .filter((po) => po.studentId === student.id && po.status !== 'paid')

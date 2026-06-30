@@ -1,7 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { firestoreStorage } from '../lib/firestoreStorage';
+import { db, firebaseEnabled } from '../lib/firebase';
 import type { Plan, Subscription, Payment } from '../lib/types';
+
+const STORE_NAME = 'pp.plans.v1';
 
 type LocalPlan = Plan;
 type LocalSub = Omit<Subscription, 'startAt' | 'endAt'> & { startAt: number; endAt?: number };
@@ -189,6 +193,33 @@ export const usePlans = create<State>()(
         pendingOrders: st.pendingOrders.filter((po) => po.id !== orderId),
       })),
     }),
-    { name: 'pp.plans.v1', storage: createJSONStorage(() => firestoreStorage) },
+    { name: STORE_NAME, storage: createJSONStorage(() => firestoreStorage) },
   ),
 );
+
+// 외부(웹훅 등)에서 appState/pp.plans.v1 을 직접 갱신했을 때 자동 반영.
+// 토스플레이스 웹훅이 Firestore JSON 만 갱신하므로 클라이언트가 알지 못해 새로고침이
+// 필요했던 문제를 해결한다.
+//   - hasPendingWrites=true : 내 로컬 write 의 즉시 콜백 → 내용을 lastJson 으로 기록해
+//                              뒤따라올 server-confirm 콜백을 자기 echo 로 인식하게 한다.
+//   - hasPendingWrites=false: 서버 확정 — lastJson 과 다르면 외부 변경이므로 rehydrate.
+if (firebaseEnabled && db && typeof window !== 'undefined') {
+  let lastJson: string | null = null;
+  try { lastJson = localStorage.getItem(STORE_NAME); } catch { /* ignore */ }
+  onSnapshot(doc(db, 'appState', STORE_NAME), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data() as { json?: string } | undefined;
+    const json = data?.json;
+    if (!json) return;
+    if (snap.metadata.hasPendingWrites) {
+      // 자기 자신의 write — 미리 lastJson 갱신해 confirm 콜백에서 echo 로 처리되게.
+      lastJson = json;
+      return;
+    }
+    if (json === lastJson) return;
+    lastJson = json;
+    // persist.rehydrate 가 storage 어댑터를 다시 호출 → localStorage 캐시도 갱신되고
+    // zustand state 가 업데이트되어 컴포넌트 자동 re-render.
+    void usePlans.persist.rehydrate();
+  }, () => { /* permission/network 오류 무시 — 다음 변경에 재시도됨 */ });
+}

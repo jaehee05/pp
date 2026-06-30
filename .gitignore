@@ -26,3 +26,6 @@ dist-ssr
 *.sln
 *.sw?
 .vercel
+
+# Claude Code 커밋 메시지 임시 파일 (HEREDOC 대신 -F 로 전달)
+.commitmsg.tmp

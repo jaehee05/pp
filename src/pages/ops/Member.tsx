@@ -6,7 +6,6 @@ import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
-import { chargeCard } from '../../lib/payment';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
 
@@ -24,7 +23,7 @@ interface OrderItem {
   kind: 'plan' | 'etc' | 'discount';
 }
 type PayMethod = 'card' | 'cash' | 'remote' | 'localpay' | 'invoice';
-interface PaymentSplit { method: PayMethod; amount: number; approvalNo?: string; txId?: string }
+interface PaymentSplit { method: PayMethod; amount: number }
 const METHOD_LABEL: Record<PayMethod, string> = {
   card: '카드',
   cash: '현금',
@@ -226,6 +225,99 @@ export function OpsMember() {
     return { main, sub };
   }, [order, plans]);
 
+  // === 토스플레이스 카드 결제 ===
+  // 결제하기 누르면 PendingOrder 로 등록 → 단말기에서 결제 완료 시 토스플레이스 웹훅으로
+  //   payment.payment.approved.v1 수신 → invoice.orderId 매칭 → 자동 paid 처리 → 이용권 활성화.
+  // 메인/서브 가맹점 분리되어 있으면 vendor 별 invoice 2건 생성 (각 단말기에서 따로 결제).
+  // 카드 단독만 허용 (현금/비대면 등과 혼합 시 별도 거래로 처리).
+  async function processCardPending() {
+    if (!student) return;
+    setProcessing(true);
+    setPayStatus('💳 토스플레이스 카드 결제 대기 등록 중…');
+    try {
+      const safeStudentId = student.id.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 32);
+      const baseOrderId = `ord_${safeStudentId}_${Date.now().toString(36)}`;
+      const lines: { vendor: 'main' | 'sub'; amount: number }[] = [];
+      if (vendorTotals.main > 0) lines.push({ vendor: 'main', amount: vendorTotals.main });
+      if (vendorTotals.sub > 0) lines.push({ vendor: 'sub', amount: vendorTotals.sub });
+      addPendingOrder({
+        studentId: student.id,
+        studentName: student.name,
+        items: order,
+        totalAmount: orderTotal,
+        invoices: lines.map((l) => ({
+          invoiceId: `card_${baseOrderId}_${l.vendor}`,
+          orderId: `${baseOrderId}_${l.vendor}`,
+          vendor: l.vendor,
+          method: 'card' as const,
+          amount: l.amount,
+          status: 'pending' as const,
+        })),
+      });
+      const breakdown = lines.map((l) => `${l.vendor === 'main' ? '메인' : '서브'} ${l.amount.toLocaleString()}원`).join(' / ');
+      setPayStatus(`💳 카드 결제 대기 등록 (${breakdown}). 단말기에서 결제하면 자동으로 이용권 활성화됩니다.`);
+      setOrder([]);
+      setPayments([{ method: 'card', amount: 0 }]);
+    } catch (e) {
+      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setPayStatus(''), 8000);
+    }
+  }
+
+  // === 현금 단독 결제 (즉시 처리) ===
+  async function processCashImmediate() {
+    if (!student) return;
+    setProcessing(true);
+    setPayStatus('현금 결제 기록 중…');
+    try {
+      const existingFutureEnds = subs
+        .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
+        .map((s) => s.endAt as number);
+      let runningLatestEnd: number | null = existingFutureEnds.length > 0 ? Math.max(...existingFutureEnds) : null;
+      for (const item of order) {
+        if (item.kind !== 'plan') continue;
+        const plan = plans.find((x) => x.id === item.planId);
+        if (!plan) continue;
+        const payId = addPayment({
+          studentId: student.id, planId: plan.id, amount: item.amount,
+          method: 'cash', status: 'approved',
+        });
+        setPaymentApproved(payId, { approvedAt: Date.now() });
+        const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
+        const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
+        addSubscription({
+          studentId: student.id, planId: plan.id,
+          planSnapshot: {
+            name: plan.name, type: plan.type,
+            durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+            price: plan.price,
+          },
+          startAt: actualStartAt, endAt,
+          hoursRemaining: plan.hours, countsRemaining: plan.counts,
+          paymentId: payId, status: 'active',
+        });
+        if (endAt) runningLatestEnd = endAt;
+      }
+      const otherTotal = order.filter((i) => i.kind !== 'plan').reduce((s, i) => s + i.amount, 0);
+      if (otherTotal !== 0) {
+        addPayment({
+          studentId: student.id, planId: 'other', amount: otherTotal,
+          method: 'cash', status: 'approved',
+        });
+      }
+      setPayStatus(`✅ 현금 결제 완료 (${orderTotal.toLocaleString()}원)`);
+      setOrder([]);
+      setPayments([{ method: 'card', amount: 0 }]);
+    } catch (e) {
+      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setProcessing(false);
+      setTimeout(() => setPayStatus(''), 5000);
+    }
+  }
+
   // === 비대면 / 성남사랑 결제 (수동 확인) ===
   // 결제하기 누르면 PendingOrder 로 보관 → 운영자가 [✓ 결제 완료 처리] 직접 클릭해야 활성화.
   // 추후 외부 결제 API 연동되면 자동 paid 처리되도록 바꿀 자리 (지금은 수동 단계).
@@ -364,19 +456,6 @@ export function OpsMember() {
     setTimeout(() => setPayStatus(''), 6000);
   }
 
-  async function callCardPay(amount: number, merchant: 'main' | 'sub', tag: string): Promise<{ ok: boolean; approvalNo?: string; txId?: string; error?: string }> {
-    if (!student) return { ok: false, error: 'no student' };
-    setPayStatus(`${tag} 카드 결제 ${amount.toLocaleString()}원 — 단말기에 카드를 긁어주세요…`);
-    const orderId = `ord_${student.id}_${merchant}_${Date.now().toString(36)}`;
-    const res = await chargeCard({ amount, merchant, orderId, taxFree: true });
-    return {
-      ok: res.ok,
-      approvalNo: res.approvalNo,
-      txId: res.txId,
-      error: res.error,
-    };
-  }
-
   async function processPayment() {
     if (!student) return;
     if (order.length === 0) return alert('주문에 이용권을 추가하세요.');
@@ -389,11 +468,10 @@ export function OpsMember() {
     }
 
     // 비대면 / 성남사랑 흐름: 외부 API 결제 완료 신호 대기 — PendingOrder 로 보관.
-    // 카드/현금 혼합 금지 (혼합 시 일부만 즉시 처리되어 혼란).
     const hasExternal = payments.some((p) => p.method === 'remote' || p.method === 'localpay');
     if (hasExternal) {
       const allExternal = payments.every((p) => p.amount === 0 || p.method === 'remote' || p.method === 'localpay');
-      if (!allExternal) return alert('비대면/성남사랑 결제는 카드/현금과 혼합할 수 없습니다.');
+      if (!allExternal) return alert('비대면/성남사랑 결제는 다른 결제수단과 혼합할 수 없습니다.');
       const methods = new Set(payments.filter((p) => p.amount > 0).map((p) => p.method));
       const tag: 'remote' | 'localpay' | 'mixed' =
         methods.size === 1
@@ -402,93 +480,16 @@ export function OpsMember() {
       return processExternalPending(tag);
     }
 
-    setProcessing(true);
-    try {
-      const splits: PaymentSplit[] = [];
-      for (let i = 0; i < payments.length; i++) {
-        const p = payments[i];
-        if (p.amount === 0) { splits.push(p); continue; }
-        if (p.method === 'card') {
-          // 카드 결제는 메인/서브로 비례 분할해 2회 단말기 호출
-          const ratio = orderTotal > 0 ? p.amount / orderTotal : 1;
-          const mainPart = Math.round(vendorTotals.main * ratio);
-          const subPart = p.amount - mainPart;
-          let combinedApprovalNo = '';
-          let combinedTxId = '';
-          if (mainPart > 0) {
-            const r1 = await callCardPay(mainPart, 'main', '[메인 독서실]');
-            if (!r1.ok) { setPayStatus(`메인 결제 실패: ${r1.error ?? ''}`); return; }
-            combinedApprovalNo += r1.approvalNo ?? '';
-            combinedTxId += r1.txId ?? '';
-          }
-          if (subPart > 0) {
-            const r2 = await callCardPay(subPart, 'sub', '[서브 교습소]');
-            if (!r2.ok) { setPayStatus(`서브 결제 실패: ${r2.error ?? ''}`); return; }
-            combinedApprovalNo += (combinedApprovalNo ? '/' : '') + (r2.approvalNo ?? '');
-            combinedTxId += (combinedTxId ? '/' : '') + (r2.txId ?? '');
-          }
-          splits.push({ ...p, approvalNo: combinedApprovalNo, txId: combinedTxId });
-        } else {
-          splits.push(p);
-        }
-      }
-      setPayStatus('승인 완료. 이용권/결제 저장 중…');
-
-      const cardSplit = splits.find((s) => s.method === 'card');
-      // 큐잉 시작점: 기존 active 이용권 중 가장 늦은 endAt. 루프 내에서 새로 추가하는 이용권의 endAt 으로 갱신.
-      const existingFutureEnds = subs
-        .filter((s) => s.studentId === student.id && s.status === 'active' && s.endAt && s.endAt > Date.now())
-        .map((s) => s.endAt as number);
-      let runningLatestEnd: number | null = existingFutureEnds.length > 0 ? Math.max(...existingFutureEnds) : null;
-      for (const item of order) {
-        if (item.kind !== 'plan') continue;
-        const plan = plans.find((x) => x.id === item.planId);
-        if (!plan) continue;
-        const payId = addPayment({
-          studentId: student.id, planId: plan.id, amount: item.amount,
-          method: splits[0]?.method ?? 'card',
-          cardApprovalNo: cardSplit?.approvalNo,
-          terminalTxId: cardSplit?.txId,
-          status: 'approved',
-        });
-        setPaymentApproved(payId, { approvedAt: Date.now() });
-
-        // 큐잉: 가장 늦은 endAt 다음날부터. (수량>1 이거나 갱신권일 때 올바르게 누적)
-        const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
-        // 기간권 종료일 = 시작일 + (일수-1) (포함 기준).
-        // 예: 6/1 시작 + 30일 = 6/30 만료 (다음권은 7/1 부터).
-        const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
-        addSubscription({
-          studentId: student.id, planId: plan.id,
-          planSnapshot: {
-            name: plan.name, type: plan.type,
-            durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
-            price: plan.price,
-          },
-          startAt: actualStartAt, endAt,
-          hoursRemaining: plan.hours,
-          countsRemaining: plan.counts,
-          paymentId: payId,
-          status: 'active',
-        });
-        if (endAt) runningLatestEnd = endAt;
-      }
-      const otherTotal = order.filter((i) => i.kind !== 'plan').reduce((s, i) => s + i.amount, 0);
-      if (otherTotal !== 0) {
-        addPayment({
-          studentId: student.id, planId: 'other', amount: otherTotal,
-          method: splits[0]?.method ?? 'card', status: 'approved',
-        });
-      }
-      setPayStatus(`✅ 결제 완료 (${orderTotal.toLocaleString()}원)`);
-      setOrder([]);
-      setPayments([{ method: 'card', amount: 0 }]);
-    } catch (e) {
-      setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      setProcessing(false);
-      setTimeout(() => setPayStatus(''), 5000);
+    // 카드 흐름: 토스플레이스 단말기 결제 — PendingOrder 등록 후 웹훅으로 자동 paid 처리.
+    const hasCard = payments.some((p) => p.method === 'card' && p.amount > 0);
+    if (hasCard) {
+      const allCard = payments.every((p) => p.amount === 0 || p.method === 'card');
+      if (!allCard) return alert('카드 결제는 다른 결제수단과 혼합할 수 없습니다. (분할 시 별도 거래)');
+      return processCardPending();
     }
+
+    // 현금 단독: 즉시 처리.
+    return processCashImmediate();
   }
 
   const allSubs = subs.filter((x) => x.studentId === student?.id)
@@ -689,11 +690,19 @@ export function OpsMember() {
               <h3 className="font-semibold text-sky-900">📋 결제 대기</h3>
               <span className="rounded bg-sky-200 px-2 py-0.5 text-[10px] font-bold text-sky-800">PENDING</span>
             </div>
-            <p className="mb-3 text-xs text-slate-600">
-              외부 결제 (지역상품권 QR / 비대면 / 성남사랑) 대기 중. 결제 완료되면
-              운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러주세요. <b>모든 결제 완료</b> 시 이용권이 자동 활성화됩니다.
-              <span className="ml-1 text-slate-400">(비대면/성남사랑은 추후 API 연동 시 자동 처리 예정)</span>
-            </p>
+            <div className="mb-3 flex items-start justify-between gap-2">
+              <p className="text-xs text-slate-600">
+                결제 대기 (카드 단말기 / 지역상품권 QR / 비대면 / 성남사랑). <b>카드</b>는 단말기 결제 시 토스플레이스 웹훅으로 자동 처리,
+                나머지는 운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러주세요. <b>모든 결제 완료</b> 시 이용권이 자동 활성화됩니다.
+                <span className="ml-1 text-slate-400">(웹훅으로 결제 반영된 직후 화면에 안 보이면 [🔄 새로고침] 클릭)</span>
+              </p>
+              <button
+                type="button"
+                className="shrink-0 rounded bg-white px-2 py-1 text-[11px] ring-1 ring-slate-300 hover:bg-slate-50"
+                onClick={() => { void usePlans.persist.rehydrate(); }}
+                title="Firestore 에서 결제 대기 상태를 다시 읽어옴 (웹훅 처리 직후 자동 반영 안 될 때)"
+              >🔄 새로고침</button>
+            </div>
             <div className="space-y-3">
               {pendingOrders
                 .filter((po) => po.studentId === student.id && po.status !== 'paid')
@@ -715,17 +724,23 @@ export function OpsMember() {
                       {po.invoices.map((iv) => {
                         const isRemote = iv.method === 'remote';
                         const isLocalpay = iv.method === 'localpay';
+                        const isCard = iv.method === 'card';
                         const isExternal = isRemote || isLocalpay;
+                        const vendorTag = iv.vendor === 'main' ? '메인' : '서브';
                         const badgeCls = isRemote
                           ? 'bg-amber-100 text-amber-700'
                           : isLocalpay
                             ? 'bg-orange-100 text-orange-700'
-                            : iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700';
+                            : isCard
+                              ? (iv.vendor === 'main' ? 'bg-sky-100 text-sky-700' : 'bg-violet-100 text-violet-700')
+                              : iv.vendor === 'main' ? 'bg-indigo-100 text-indigo-700' : 'bg-fuchsia-100 text-fuchsia-700';
                         const badgeLabel = isRemote
                           ? '비대면'
                           : isLocalpay
                             ? '성남사랑'
-                            : iv.vendor === 'main' ? '메인 (독서실 / 면세)' : '서브 (교습소 / 과세)';
+                            : isCard
+                              ? `💳 카드 · ${vendorTag}`
+                              : iv.vendor === 'main' ? '메인 (독서실 / 면세)' : '서브 (교습소 / 과세)';
                         return (
                         <div key={iv.invoiceId} className="rounded bg-slate-50 p-2 text-xs">
                           <div className="flex items-center justify-between">
@@ -747,11 +762,31 @@ export function OpsMember() {
                                 <button
                                   className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-semibold text-white hover:bg-emerald-700"
                                   onClick={() => updateInvoiceStatus(po.id, iv.invoiceId, 'paid')}
-                                  title={isExternal ? '비대면/성남사랑 결제 완료되면 직접 클릭 (추후 API 자동화 예정)' : '해당 가맹점 지역상품권 QR 결제가 확인되면 클릭'}
+                                  title={
+                                    isCard ? '단말기 결제 안 잡히면 수동 처리 (웹훅 실패 등)'
+                                    : isExternal ? '비대면/성남사랑 결제 완료되면 직접 클릭 (추후 API 자동화 예정)'
+                                    : '해당 가맹점 지역상품권 QR 결제가 확인되면 클릭'
+                                  }
                                 >✓ 결제 완료 처리</button>
                               )}
                             </div>
                           </div>
+                          {isCard && iv.orderId && iv.status === 'pending' && (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                              <span>주문ID</span>
+                              <button
+                                type="button"
+                                className="font-mono font-semibold text-slate-800 hover:bg-sky-100 hover:underline"
+                                title="클릭해 주문ID 복사"
+                                onClick={() => {
+                                  navigator.clipboard?.writeText(iv.orderId ?? '');
+                                  setPayStatus('주문ID 복사됨');
+                                  setTimeout(() => setPayStatus(''), 2000);
+                                }}
+                              >{iv.orderId}</button>
+                              <span className="text-slate-400">단말기 결제 시 자동 매칭됨</span>
+                            </div>
+                          )}
                           {iv.accountNumber && (
                             <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-700">
                               <span><b>{iv.bank ?? ''}</b></span>
@@ -988,6 +1023,7 @@ export function OpsMember() {
           <ol className="mt-4 space-y-3 text-sm">
             {payments.map((p, i) => {
               const external = p.method === 'remote' || p.method === 'localpay';
+              const card = p.method === 'card';
               return (
               <li key={i} className="grid grid-cols-1 items-center gap-2 sm:grid-cols-12 sm:gap-3">
                 <span className="hidden text-center text-slate-400 sm:col-span-1 sm:block">{i + 1}</span>
@@ -998,7 +1034,9 @@ export function OpsMember() {
                         className={`flex-1 px-2 py-1.5 text-xs sm:px-3 sm:text-sm ${p.method === m
                           ? (m === 'remote' || m === 'localpay'
                             ? 'bg-amber-100 text-amber-700 font-semibold'
-                            : 'bg-brand-100 text-brand-700 font-semibold')
+                            : m === 'card'
+                              ? 'bg-sky-100 text-sky-700 font-semibold'
+                              : 'bg-brand-100 text-brand-700 font-semibold')
                           : 'bg-white text-slate-600'}`}>
                         {METHOD_LABEL[m]}
                       </button>
@@ -1014,6 +1052,11 @@ export function OpsMember() {
                     <button className="text-xs text-rose-500 hover:underline" onClick={() => removeSplit(i)}>삭제</button>
                   )}
                 </div>
+                {card && (
+                  <div className="text-[11px] text-sky-700 sm:col-span-12 sm:pl-12">
+                    💳 [결제하기] 누르면 <b>결제 대기</b> 로 등록되고 주문ID가 발급됨. 토스플레이스 단말기에서 결제 완료되면 웹훅으로 자동 이용권 활성화. (혼합 결제 불가)
+                  </div>
+                )}
                 {external && (
                   <div className="text-[11px] text-amber-700 sm:col-span-12 sm:pl-12">
                     ℹ️ [결제하기] 누르면 <b>결제 대기 상태</b>로 보관. 운영자가 <b>[✓ 결제 완료 처리]</b> 를 직접 눌러야 이용권이 활성화됩니다. (추후 외부 결제 API 연동 시 자동 처리 / 카드·현금 혼합 불가)
@@ -1036,7 +1079,7 @@ export function OpsMember() {
           >
             {processing
               ? '처리 중…'
-              : payments.some((p) => (p.method === 'remote' || p.method === 'localpay' || p.method === 'invoice') && p.amount > 0)
+              : payments.some((p) => (p.method === 'card' || p.method === 'remote' || p.method === 'localpay' || p.method === 'invoice') && p.amount > 0)
                 ? '결제 대기 등록'
                 : '결제하기'}
           </button>

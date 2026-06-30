@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { firestoreStorage } from '../lib/firestoreStorage';
+import { firestoreStorage, subscribeExternalUpdates } from '../lib/firestoreStorage';
 import type { Student, WeekdayKey } from '../lib/types';
+
+const STORE_NAME = 'pp.students.v1';
 
 type LocalStudent = Omit<Student, 'joinedAt' | 'pointsTotal'> & {
   joinedAt: number;
@@ -62,7 +64,7 @@ export const useStudents = create<State>()(
       get: (id) => get().list.find((x) => x.id === id),
     }),
     {
-      name: 'pp.students.v1',
+      name: STORE_NAME,
       storage: createJSONStorage(() => firestoreStorage),
       merge: (persisted, current) => {
         const p = persisted as State | undefined;
@@ -72,6 +74,9 @@ export const useStudents = create<State>()(
     },
   ),
 );
+
+// 외부(페이스패스 등록 콜백 등)에서 appState/pp.students.v1 직접 갱신 시 자동 rehydrate.
+subscribeExternalUpdates(STORE_NAME, () => useStudents.persist.rehydrate());
 
 export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTotal'> {
   return {

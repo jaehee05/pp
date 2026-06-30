@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import type { StateStorage } from 'zustand/middleware';
 import { db, firebaseEnabled } from './firebase';
 
@@ -76,3 +76,31 @@ export const firestoreStorage: StateStorage = {
     }
   },
 };
+
+// 외부(웹훅 등)에서 appState/{name} 문서를 직접 갱신했을 때 zustand 스토어 자동 rehydrate.
+//   - hasPendingWrites=true : 내 로컬 write 의 즉시 콜백 → 내용을 lastJson 으로 기록해
+//                              뒤따라올 server-confirm 콜백을 자기 echo 로 인식하게 한다.
+//   - hasPendingWrites=false: 서버 확정 — lastJson 과 다르면 외부 변경이므로 rehydrate.
+// 권한/네트워크 오류는 무시 (다음 변경 콜백에서 자연 재시도).
+export function subscribeExternalUpdates(name: string, rehydrate: () => Promise<unknown> | void) {
+  if (!firebaseEnabled || !db || typeof window === 'undefined') return () => { /* noop */ };
+  let lastJson: string | null = null;
+  try { lastJson = localStorage.getItem(name); } catch { /* ignore */ }
+  return onSnapshot(
+    doc(db, COLLECTION, name),
+    (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as { json?: string } | undefined;
+      const json = data?.json;
+      if (!json) return;
+      if (snap.metadata.hasPendingWrites) {
+        lastJson = json;
+        return;
+      }
+      if (json === lastJson) return;
+      lastJson = json;
+      void rehydrate();
+    },
+    () => { /* permission/network 오류 무시 */ },
+  );
+}

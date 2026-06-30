@@ -1,0 +1,18 @@
+페이스패스 (Toss FacePass) 출입 통합 그라운드워크
+
+토스 Front 단말의 Plugin SDK 에서 콜백을 받아 학생 faceId 등록 및 출입 토글하는
+스텁 추가. 실제 통합은 토스플레이스 가맹점 등록 + Front 단말 도입 + SDK 키 발급
+후 시그니처 확정되면 보강.
+
+- Student.faceId 필드 (지문과 병존)
+- api/facepass/enroll.ts  — 등록 콜백 → faceId 갱신
+- api/facepass/identify.ts — 인증 콜백 → 출입 토글 (source='face', 5초 dedupe)
+- deviceAgent: enroll_face / identify_face 메시지 + mock 핸들러
+- 회원정보 페이지: 😊 페이스패스 등록/삭제 버튼
+
+부수 개선:
+- firestoreStorage 에 subscribeExternalUpdates 헬퍼 추출 (plans/students/attendance
+  스토어가 외부 Firestore 변경 자동 rehydrate — 페이스패스 콜백 + 토스플레이스 웹훅 반영)
+- AttendanceLog.source 에 'face' 추가
+- FACEPASS_CALLBACK_SECRET / FIREBASE_PROJECT_ID / GOOGLE_APPLICATION_CREDENTIALS_JSON
+  .env.example 추가

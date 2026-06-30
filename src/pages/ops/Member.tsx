@@ -89,6 +89,12 @@ export function OpsMember() {
         setEnrolling(false);
         alert('지문 등록 완료');
       }
+      // 페이스패스 등록 콜백 — 같은 LAN 의 토스 Front 단말 plugin 이 ws 로 알림.
+      // 일반 흐름은 단말이 HTTPS 로 /api/facepass/enroll 호출 → Firestore 갱신 → onSnapshot 으로 반영.
+      if (e.type === 'face_enroll_done' && student && (!e.studentId || e.studentId === student.id)) {
+        update(student.id, { faceId: e.faceId });
+        alert('페이스패스 등록 완료');
+      }
     });
     return () => { off(); };
   }, [student, update]);
@@ -121,6 +127,20 @@ export function OpsMember() {
     deviceAgent.send({ id: `e_${student.id}`, cmd: 'enroll_fingerprint', studentId: student.id });
   }
   function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
+
+  // 페이스패스 등록 안내 — 실제 enroll 은 토스 Front 단말(키오스크)에서 학생 본인이 진행.
+  // 운영자 PC 에선 등록 링크/QR 만 발급하고, Front 단말의 enroll 콜백이 /api/facepass/enroll
+  // 로 POST 하면 학생 faceId 가 채워진다. (현재는 mock — 실제 토스 Front 도입 후 활성화)
+  const [facePassEnrollMsg, setFacePassEnrollMsg] = useState('');
+  function startFacePassEnroll() {
+    if (!student) return;
+    // 운영용 안내 — Toss Front 단말에 학생ID 전달 → 학생이 단말에서 얼굴 등록.
+    // 임시: 콜백 URL 만 안내.
+    const enrollUrl = `${window.location.origin}/api/facepass/enroll?studentId=${encodeURIComponent(student.id)}`;
+    setFacePassEnrollMsg(`토스 Front 단말에서 학생ID ${student.id} 로 페이스패스 등록 진행 (콜백: ${enrollUrl})`);
+    setTimeout(() => setFacePassEnrollMsg(''), 8000);
+  }
+  function deleteFace() { if (student && confirm('페이스패스 등록을 삭제할까요?')) update(student.id, { faceId: '' }); }
 
   // 좌석타입 + 숨김 + 할인 등급 + 노출 월 필터 적용된 이용권 후보
   // 월 필터 기준일: 이 학생이 이 이용권을 산다면 "시작될" 날짜.
@@ -580,7 +600,23 @@ export function OpsMember() {
               <input className="input font-mono" maxLength={4} value={v?.pin ?? ''} readOnly={!editMode}
                 onChange={(e) => setDraftField('pin', e.target.value.replace(/\D/g, '').slice(0, 4))} />
             </Field>
-            <div className="col-span-4" />
+            <Field label="" col={2}>
+              <button
+                className={`rounded-md px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  student.faceId ? 'bg-emerald-50 text-emerald-700 ring-emerald-300' : 'bg-white'
+                }`}
+                onClick={student.faceId ? deleteFace : startFacePassEnroll}
+                disabled={editMode}
+                title={student.faceId ? '페이스패스 등록 삭제' : '토스 Front 단말에서 학생 본인이 얼굴 등록'}>
+                {student.faceId ? '😊 페이스패스 ✓' : '😊 페이스패스 등록'}
+              </button>
+            </Field>
+            <div className="col-span-2" />
+            {facePassEnrollMsg && (
+              <div className="col-span-12 -mt-2 rounded-md bg-sky-50 px-3 py-2 text-[11px] text-sky-800">
+                {facePassEnrollMsg}
+              </div>
+            )}
 
             <Field label="생년월일" col={4}>
               <input className="input" type="date" value={v?.birthYmd ?? ''} readOnly={!editMode}

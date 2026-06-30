@@ -1,9 +1,11 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { firestoreStorage } from '../lib/firestoreStorage';
+import { firestoreStorage, subscribeExternalUpdates } from '../lib/firestoreStorage';
 import type { AttendanceLog, AttendanceState } from '../lib/types';
 import { notify } from '../lib/notifications';
 import { useStudents } from './students';
+
+const STORE_NAME = 'pp.attendance.v1';
 
 type LocalLog = Omit<AttendanceLog, 'at'> & { at: number };
 type LocalState = Omit<AttendanceState, 'lastEnterAt' | 'lastEventAt'> & {
@@ -71,6 +73,9 @@ export const useAttendance = create<State>()(
         append(set, log, st);
       },
     }),
-    { name: 'pp.attendance.v1', storage: createJSONStorage(() => firestoreStorage) },
+    { name: STORE_NAME, storage: createJSONStorage(() => firestoreStorage) },
   ),
 );
+
+// 외부(페이스패스 식별 콜백 등)에서 appState/pp.attendance.v1 직접 갱신 시 자동 rehydrate.
+subscribeExternalUpdates(STORE_NAME, () => useAttendance.persist.rehydrate());

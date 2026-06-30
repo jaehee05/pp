@@ -1,4 +1,13 @@
 // 학생의 현재 활성 이용권 + D-day 계산 헬퍼.
+// 모든 날짜 비교는 KST(UTC+9) 00:00 기준 — 브라우저 timezone 무관.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+// 주어진 epoch ms 가 속한 KST 날짜의 00:00 epoch ms.
+function kstMidnight(ts: number): number {
+  const shifted = ts + KST_OFFSET_MS;
+  const d = new Date(shifted);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - KST_OFFSET_MS;
+}
+
 export interface ActiveSubInfo {
   endAt: number;        // epoch ms
   ddays: number;        // 양수=남은 일수, 0=오늘, 음수=만료 후
@@ -6,18 +15,16 @@ export interface ActiveSubInfo {
 }
 
 export function ddayOf(endAt: number): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const end = new Date(endAt);
-  end.setHours(0, 0, 0, 0);
-  return Math.round((end.getTime() - today.getTime()) / 86400000);
+  const today0 = kstMidnight(Date.now());
+  const end0 = kstMidnight(endAt);
+  return Math.round((end0 - today0) / 86400000);
 }
 
 export function expiryShort(endAt: number): string {
-  const d = new Date(endAt);
-  const y = String(d.getFullYear()).slice(2);
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const d = new Date(endAt + KST_OFFSET_MS);
+  const y = String(d.getUTCFullYear()).slice(2);
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
   return `${y}/${m}/${day}`;
 }
 
@@ -43,12 +50,9 @@ export function upcomingSubsOf<T extends SubLike>(subs: T[], studentId: string, 
     .sort((a, b) => a.startAt - b.startAt);
 }
 
-// 주어진 시각의 다음 날 00:00 (자정) 반환. 갱신 이용권 시작일 계산용.
+// 주어진 시각의 다음 날 KST 00:00 반환. 갱신 이용권 시작일 계산용.
 export function nextDayStart(ts: number): number {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 1);
-  return d.getTime();
+  return kstMidnight(ts) + 86400000;
 }
 
 // 활성 이용권 중 가장 늦은 종료 시각 (현재 + 예정 모두 포함). D-day 계산용.

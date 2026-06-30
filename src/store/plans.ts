@@ -101,6 +101,45 @@ function migrateMonthDuration(list: LocalPlan[]): LocalPlan[] {
   });
 }
 
+// 1개월 이용권인데 endAt 이 "시작 월의 마지막 날 - 1" 로 들어가 있는 기존 sub 보정.
+// 예: 7/1 시작 + (구) durationDays=30 → 7/30 만료. 캘린더 1개월 기준으로는 7/31 이어야 함.
+// 조건 (보수적):
+//   - status === 'active'
+//   - startAt KST = (어떤 달의) 1일 00:00
+//   - endAt KST = (같은 달의) 마지막 날 - 1 일
+//   - planSnapshot 이 1개월 플랜 패턴 (durationMonths===1 또는 durationDays===30 + 이름에 "개월/달")
+// 위 조건 모두 만족 시 endAt 을 해당 월의 마지막 날 KST 00:00 으로 보정. 멱등.
+const KST_OFFSET_MS_FIX = 9 * 60 * 60 * 1000;
+function migrateMonthlySubEndAt(subs: LocalSub[]): LocalSub[] {
+  return subs.map((s) => {
+    if (s.status !== 'active') return s;
+    if (!s.startAt || !s.endAt) return s;
+
+    const startKst = new Date(s.startAt + KST_OFFSET_MS_FIX);
+    if (startKst.getUTCDate() !== 1) return s;
+    const y = startKst.getUTCFullYear();
+    const m = startKst.getUTCMonth();
+
+    // 같은 달 안에 있는 endAt 만 대상.
+    const endKst = new Date(s.endAt + KST_OFFSET_MS_FIX);
+    if (endKst.getUTCFullYear() !== y || endKst.getUTCMonth() !== m) return s;
+
+    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    const properEnd = Date.UTC(y, m, lastDay) - KST_OFFSET_MS_FIX;
+    if (s.endAt === properEnd) return s;                          // 이미 맞음
+    const oneDayBeforeLast = properEnd - 86400000;
+    if (s.endAt !== oneDayBeforeLast) return s;                   // 끝-1일 패턴만
+
+    const snap = s.planSnapshot ?? {} as LocalSub['planSnapshot'];
+    const looksLikeMonthlyPlan =
+      snap.durationMonths === 1 ||
+      (snap.durationDays === 30 && /개월|달/.test(snap.name ?? ''));
+    if (!looksLikeMonthlyPlan) return s;
+
+    return { ...s, endAt: properEnd };
+  });
+}
+
 export const usePlans = create<State>()(
   persist(
     (set) => ({
@@ -215,12 +254,24 @@ export const usePlans = create<State>()(
       storage: createJSONStorage(() => firestoreStorage),
       merge: (persisted, current) => {
         const p = persisted as Partial<State> | undefined;
-        if (!p || !Array.isArray(p.plans)) return current;
-        return { ...current, ...p, plans: migrateMonthDuration(p.plans) };
+        if (!p) return current;
+        return {
+          ...current,
+          ...p,
+          plans: Array.isArray(p.plans) ? migrateMonthDuration(p.plans) : current.plans,
+          subs: Array.isArray(p.subs) ? migrateMonthlySubEndAt(p.subs) : current.subs,
+        };
       },
     },
   ),
 );
+
+// 하이드레이션 완료 직후, 마이그레이션이 sub.endAt 등을 바꿨을 수 있으므로
+// 강제 setState 로 persist write 를 한 번 트리거 → Firestore 에 보정 결과 즉시 반영.
+// (no-op 변경처럼 보여도 객체 참조 새로 만들면 persist 가 setItem 호출함)
+usePlans.persist.onFinishHydration?.(() => {
+  usePlans.setState((s) => ({ ...s }));
+});
 
 // 외부(토스플레이스 웹훅 등)에서 appState/pp.plans.v1 을 직접 갱신했을 때 자동 rehydrate.
 subscribeExternalUpdates(STORE_NAME, () => usePlans.persist.rehydrate());

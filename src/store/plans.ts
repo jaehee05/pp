@@ -42,6 +42,7 @@ export interface PendingOrder {
     amount: number;
     startAt: number;
     durationDays?: number;
+    durationMonths?: number;
     hours?: number;
     counts?: number;
     kind: 'plan' | 'etc' | 'discount';
@@ -78,9 +79,27 @@ interface State {
 const DEFAULT_PLANS: LocalPlan[] = [
   { id: 'p_1d', name: '1일권', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 1, kind: '일반',
     taxFreeAmount: 16400, taxableAmount: 0, price: 16400, active: true },
-  { id: 'p_1m_basic', name: '1개월 기본', category: 'seat', seatType: 'fixed', type: 'period', durationDays: 30, kind: '일반',
+  { id: 'p_1m_basic', name: '1개월 기본', category: 'seat', seatType: 'fixed', type: 'period', durationMonths: 1, kind: '일반',
     taxFreeAmount: 169670, taxableAmount: 320330, price: 490000, active: true, discountPolicy: '분두 비원생 정상가 (0%)' },
 ];
+
+// 레거시 durationDays(30/60/90/180/365) 가 이름에 "개월" 포함된 기간권에 박혀있으면
+// durationMonths 로 변환 (시작 월 마지막 날까지 캘린더 기준).
+// 이름이 "30일권" 같이 명시적이면 그대로 둠.
+function migrateMonthDuration(list: LocalPlan[]): LocalPlan[] {
+  const dayToMonth: Record<number, number> = { 30: 1, 60: 2, 90: 3, 180: 6, 365: 12 };
+  return list.map((p) => {
+    if (p.type !== 'period') return p;
+    if (p.durationMonths != null) return p;
+    if (p.durationDays == null) return p;
+    const monthsMaybe = dayToMonth[p.durationDays];
+    if (!monthsMaybe) return p;
+    if (!/개월|달/.test(p.name)) return p;
+    const next: LocalPlan = { ...p, durationMonths: monthsMaybe };
+    delete (next as { durationDays?: number }).durationDays;
+    return next;
+  });
+}
 
 export const usePlans = create<State>()(
   persist(
@@ -191,7 +210,15 @@ export const usePlans = create<State>()(
         pendingOrders: st.pendingOrders.filter((po) => po.id !== orderId),
       })),
     }),
-    { name: STORE_NAME, storage: createJSONStorage(() => firestoreStorage) },
+    {
+      name: STORE_NAME,
+      storage: createJSONStorage(() => firestoreStorage),
+      merge: (persisted, current) => {
+        const p = persisted as Partial<State> | undefined;
+        if (!p || !Array.isArray(p.plans)) return current;
+        return { ...current, ...p, plans: migrateMonthDuration(p.plans) };
+      },
+    },
   ),
 );
 

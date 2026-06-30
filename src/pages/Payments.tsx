@@ -5,6 +5,7 @@ import { usePlans } from '../store/plans';
 import { useStudents } from '../store/students';
 import { deviceAgent } from '../lib/deviceAgent';
 import { fmtDateTime, fmtMoney } from '../lib/format';
+import { computeEndAt } from '../lib/sub';
 
 export function PaymentsPage() {
   const { plans, pays, subs, addPayment, setPaymentApproved, addSubscription } = usePlans();
@@ -58,12 +59,11 @@ export function PaymentsPage() {
         terminalTxId: e.txId,
       });
       const start = Date.now();
-      // 기간권 종료일 = 시작일 + (일수-1) (포함 기준).
-      const end = plan.durationDays ? start + (plan.durationDays - 1) * 86400000 : undefined;
+      const end = computeEndAt(start, { durationDays: plan.durationDays, durationMonths: plan.durationMonths });
       addSubscription({
         studentId: student.id,
         planId: plan.id,
-        planSnapshot: { name: plan.name, type: plan.type, durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts, price: plan.price },
+        planSnapshot: { name: plan.name, type: plan.type, durationDays: plan.durationDays, durationMonths: plan.durationMonths, hours: plan.hours, counts: plan.counts, price: plan.price },
         startAt: start,
         endAt: end,
         hoursRemaining: plan.hours,

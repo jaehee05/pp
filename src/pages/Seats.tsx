@@ -8,7 +8,7 @@ import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
-import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf, nextDayStart } from '../lib/sub';
+import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { liveAppState } from '../lib/firestoreSync';
@@ -248,7 +248,7 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     }
   }
 
-  function confirmAssign(data: { studentId: string; useExisting: boolean; planId?: string; startAt?: number; durationDays?: number }) {
+  function confirmAssign(data: { studentId: string; useExisting: boolean; planId?: string; startAt?: number; durationDays?: number; durationMonths?: number }) {
     const seat = seats.find((s) => s.id === assignSeatId);
     if (!seat) return;
     // 신규 구매면 Subscription 생성, 기존 사용이면 스킵 (좌석 배정만)
@@ -261,14 +261,14 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
         .map((s) => s.endAt as number);
       const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
       const actualStartAt = latestEnd ? nextDayStart(latestEnd) : data.startAt;
-      // 기간권 종료일 = 시작일 + (일수-1) (포함 기준). 예: 6/1 + 30일 = 6/30.
-      const endAt = data.durationDays ? actualStartAt + (data.durationDays - 1) * 86400000 : undefined;
+      const endAt = computeEndAt(actualStartAt, { durationDays: data.durationDays, durationMonths: data.durationMonths });
       addSubscription({
         studentId: data.studentId,
         planId: plan.id,
         planSnapshot: {
           name: plan.name, type: plan.type,
-          durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+          durationDays: plan.durationDays, durationMonths: plan.durationMonths,
+          hours: plan.hours, counts: plan.counts,
           price: plan.price,
         },
         startAt: actualStartAt,

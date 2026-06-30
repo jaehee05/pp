@@ -6,16 +6,18 @@ import type { Plan } from '../../lib/types';
 import { fmtMoney } from '../../lib/format';
 
 function periodLabel(p: Plan): string {
-  if (p.type === 'period' && p.durationDays != null) {
-    if (p.durationDays === 1) return '1일';
-    if (p.durationDays === 7) return '1주';
-    if (p.durationDays === 14) return '2주';
-    if (p.durationDays === 30) return '1개월';
-    if (p.durationDays === 60) return '2개월';
-    if (p.durationDays === 90) return '3개월';
-    if (p.durationDays === 180) return '6개월';
-    if (p.durationDays === 365) return '1년';
-    return `${p.durationDays}일`;
+  if (p.type === 'period') {
+    if (p.durationMonths) {
+      if (p.durationMonths === 12) return '1년';
+      return `${p.durationMonths}개월`;
+    }
+    if (p.durationDays != null) {
+      if (p.durationDays === 1) return '1일';
+      if (p.durationDays === 7) return '1주';
+      if (p.durationDays === 14) return '2주';
+      if (p.durationDays === 365) return '1년 (일)';
+      return `${p.durationDays}일`;
+    }
   }
   if (p.type === 'hours') return `${p.hours}시간`;
   if (p.type === 'count') return `${p.counts}회`;
@@ -60,7 +62,7 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
       seatType: category === 'seat' ? 'fixed' : undefined,
       kind: '일반',
       type: 'period',
-      durationDays: 30,
+      durationMonths: 1,
       taxFreeAmount: 0,
       taxableAmount: 0,
       price: 0,
@@ -231,10 +233,34 @@ function PlanForm({ plan, onClose, onSave }: { plan: Plan; onClose: () => void; 
           </select>
         </label>
         {v.type === 'period' && (
-          <label>기간 (일)
-            <input className="input mt-1" type="number" min={1} value={v.durationDays ?? 30}
-              onChange={(e) => setV({ ...v, durationDays: +e.target.value })} />
-          </label>
+          <>
+            <label>기간 단위
+              <select
+                className="input mt-1"
+                value={v.durationMonths != null ? 'month' : 'day'}
+                onChange={(e) => {
+                  if (e.target.value === 'month') {
+                    setV({ ...v, durationMonths: v.durationMonths ?? 1, durationDays: undefined });
+                  } else {
+                    setV({ ...v, durationDays: v.durationDays ?? 30, durationMonths: undefined });
+                  }
+                }}>
+                <option value="month">개월 (캘린더 — 시작 월의 마지막 날까지)</option>
+                <option value="day">일 (정확히 N일)</option>
+              </select>
+            </label>
+            {v.durationMonths != null ? (
+              <label>기간 (개월)
+                <input className="input mt-1" type="number" min={1} value={v.durationMonths}
+                  onChange={(e) => setV({ ...v, durationMonths: +e.target.value, durationDays: undefined })} />
+              </label>
+            ) : (
+              <label>기간 (일)
+                <input className="input mt-1" type="number" min={1} value={v.durationDays ?? 30}
+                  onChange={(e) => setV({ ...v, durationDays: +e.target.value, durationMonths: undefined })} />
+              </label>
+            )}
+          </>
         )}
         {v.type === 'hours' && (
           <label>시간 (h)

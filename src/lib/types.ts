@@ -79,7 +79,10 @@ export interface Plan {
   category: 'seat' | 'room';    // 좌석권 / 룸·사물함권
   seatType?: 'fixed' | 'free';  // 좌석권일 때만: 고정석/자유석
   type: 'period' | 'hours' | 'count'; // 기간제 / 시간제 / 회차제
+  // 기간권은 durationMonths (캘린더 개월 — 시작일+N개월-1일, 월 마지막날 클램프)
+  // 또는 durationDays (정확히 N일) 중 하나로 표현. 둘 다 있으면 durationMonths 우선.
   durationDays?: number;
+  durationMonths?: number;
   hours?: number;
   counts?: number;
 
@@ -102,7 +105,7 @@ export interface Subscription {
   id: ID;
   studentId: ID;
   planId: ID;
-  planSnapshot: Pick<Plan, 'name' | 'type' | 'durationDays' | 'hours' | 'counts' | 'price'>;
+  planSnapshot: Pick<Plan, 'name' | 'type' | 'durationDays' | 'durationMonths' | 'hours' | 'counts' | 'price'>;
   startAt: TS;
   endAt?: TS;          // period 형
   hoursRemaining?: number;

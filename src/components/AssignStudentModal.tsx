@@ -10,6 +10,7 @@ export interface AssignData {
   planId?: string;               // useExisting=false 일 때만
   startAt?: number;
   durationDays?: number;
+  durationMonths?: number;
 }
 
 export function AssignStudentModal({
@@ -63,6 +64,7 @@ export function AssignStudentModal({
       planId: mode === 'new' ? planId : undefined,
       startAt: mode === 'new' ? new Date(start).getTime() : undefined,
       durationDays: mode === 'new' ? chosenPlan?.durationDays : undefined,
+      durationMonths: mode === 'new' ? chosenPlan?.durationMonths : undefined,
     });
     reset();
   }
@@ -173,7 +175,8 @@ export function AssignStudentModal({
               {chosenPlan && (
                 <div className="mt-3 rounded-md bg-slate-50 p-3 text-xs text-slate-600">
                   <div>유형: {chosenPlan.type === 'period' ? '기간권' : chosenPlan.type === 'hours' ? '시간권' : '회차권'}</div>
-                  {chosenPlan.durationDays && <div>기간: {chosenPlan.durationDays}일</div>}
+                  {chosenPlan.durationMonths && <div>기간: {chosenPlan.durationMonths}개월 (시작 월의 마지막 날까지)</div>}
+                  {!chosenPlan.durationMonths && chosenPlan.durationDays && <div>기간: {chosenPlan.durationDays}일</div>}
                   {chosenPlan.hours && <div>시간: {chosenPlan.hours}h</div>}
                   {chosenPlan.counts && <div>회차: {chosenPlan.counts}회</div>}
                   <div className="mt-1 font-semibold text-slate-800">{fmtMoney(chosenPlan.price)}</div>

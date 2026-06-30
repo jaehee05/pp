@@ -55,6 +55,39 @@ export function nextDayStart(ts: number): number {
   return kstMidnight(ts) + 86400000;
 }
 
+// startAt 부터 N개월 후 "같은 날짜" KST 00:00.
+// 시작일 day 가 대상 월에 없으면 (예: 1/31 + 1개월 → 2/31 없음) 그 월의 마지막 날로 클램프.
+function addMonthsKstClamped(startAt: number, months: number): number {
+  const start = new Date(startAt + KST_OFFSET_MS);
+  const y = start.getUTCFullYear();
+  const m = start.getUTCMonth();
+  const day = start.getUTCDate();
+  const totalMonths = m + months;
+  const newY = y + Math.floor(totalMonths / 12);
+  const newM = ((totalMonths % 12) + 12) % 12;
+  // 다음 달의 0일 = 현재 달의 마지막 날
+  const lastDay = new Date(Date.UTC(newY, newM + 1, 0)).getUTCDate();
+  const newDay = Math.min(day, lastDay);
+  return Date.UTC(newY, newM, newDay) - KST_OFFSET_MS;
+}
+
+// 시작 시각 + 기간 → 만료일 KST 00:00.
+//   durationMonths : 캘린더 N개월 — (시작일 + N개월 - 1일). 7/1 + 1개월 = 7/31, 6/1 + 1개월 = 6/30.
+//   durationDays   : 정확히 N일 — 시작일 포함 N일째 (시작일 + (N-1)일).
+// 둘 다 없으면 undefined (만료 없음 — 시간권/회차권은 호출 측에서 처리).
+export function computeEndAt(
+  startAt: number,
+  opts: { durationDays?: number; durationMonths?: number },
+): number | undefined {
+  if (opts.durationMonths && opts.durationMonths > 0) {
+    return addMonthsKstClamped(startAt, opts.durationMonths) - 86400000;
+  }
+  if (opts.durationDays && opts.durationDays > 0) {
+    return startAt + (opts.durationDays - 1) * 86400000;
+  }
+  return undefined;
+}
+
 // 활성 이용권 중 가장 늦은 종료 시각 (현재 + 예정 모두 포함). D-day 계산용.
 export function lastActiveEndOf<T extends SubLike>(subs: T[], studentId: string): number | null {
   const ends = subs

@@ -7,7 +7,7 @@ import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
-import { currentSubOf, lastActiveEndOf, nextDayStart } from '../../lib/sub';
+import { currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../../lib/sub';
 
 type LogTab = 'member' | 'use' | 'pay';
 
@@ -18,6 +18,7 @@ interface OrderItem {
   amount: number;            // 음수 = 할인/기타조정
   startAt: number;
   durationDays?: number;
+  durationMonths?: number;
   hours?: number;
   counts?: number;
   kind: 'plan' | 'etc' | 'discount';
@@ -178,7 +179,8 @@ export function OpsMember() {
       name: qty > 1 ? `${plan.name} (${i + 1}/${qty})` : plan.name,
       amount: plan.price,
       startAt: fromLocalISODate(startDate),
-      durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+      durationDays: plan.durationDays, durationMonths: plan.durationMonths,
+      hours: plan.hours, counts: plan.counts,
     }));
     setOrder((prev) => [...prev, ...items]);
     setSelectedPlanId('');
@@ -306,12 +308,13 @@ export function OpsMember() {
         });
         setPaymentApproved(payId, { approvedAt: Date.now() });
         const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
-        const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
+        const endAt = computeEndAt(actualStartAt, { durationDays: item.durationDays, durationMonths: item.durationMonths });
         addSubscription({
           studentId: student.id, planId: plan.id,
           planSnapshot: {
             name: plan.name, type: plan.type,
-            durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+            durationDays: plan.durationDays, durationMonths: plan.durationMonths,
+            hours: plan.hours, counts: plan.counts,
             price: plan.price,
           },
           startAt: actualStartAt, endAt,
@@ -454,12 +457,13 @@ export function OpsMember() {
       const plan = plans.find((x) => x.id === item.planId);
       if (!plan) continue;
       const actualStartAt = runningLatestEnd ? nextDayStart(runningLatestEnd) : item.startAt;
-      const endAt = item.durationDays ? actualStartAt + (item.durationDays - 1) * 86400000 : undefined;
+      const endAt = computeEndAt(actualStartAt, { durationDays: item.durationDays, durationMonths: item.durationMonths });
       const subId = addSubscription({
         studentId: student.id, planId: plan.id,
         planSnapshot: {
           name: plan.name, type: plan.type,
-          durationDays: plan.durationDays, hours: plan.hours, counts: plan.counts,
+          durationDays: plan.durationDays, durationMonths: plan.durationMonths,
+          hours: plan.hours, counts: plan.counts,
           price: plan.price,
         },
         startAt: actualStartAt, endAt,
@@ -692,7 +696,11 @@ export function OpsMember() {
               <Field2 label="상태"><span className="text-emerald-600 font-semibold">이용중</span></Field2>
               <Field2 label="시작일">{toLocalISODate(sub.startAt)}</Field2>
               <Field2 label="종료일">{sub.endAt ? toLocalISODate(sub.endAt) : '-'}</Field2>
-              <Field2 label="이용기간">{sub.planSnapshot.durationDays ? `${sub.planSnapshot.durationDays}일` : '-'}</Field2>
+              <Field2 label="이용기간">{
+                sub.planSnapshot.durationMonths
+                  ? `${sub.planSnapshot.durationMonths}개월`
+                  : sub.planSnapshot.durationDays ? `${sub.planSnapshot.durationDays}일` : '-'
+              }</Field2>
               <Field2 label="잔여기간">
                 {(() => {
                   const lastEnd = lastActiveEndOf(subs, student.id);
@@ -1198,9 +1206,13 @@ export function OpsMember() {
                     <option value="count">회차권</option>
                   </select>
                 </label>
+                <label>기간(개월)
+                  <input className="input mt-1" type="number" min={0} value={s.planSnapshot.durationMonths ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, durationMonths: +e.target.value || undefined } })} />
+                </label>
                 <label>기간(일)
-                  <input className="input mt-1" type="number" min={1} value={s.planSnapshot.durationDays ?? 0}
-                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, durationDays: +e.target.value } })} />
+                  <input className="input mt-1" type="number" min={0} value={s.planSnapshot.durationDays ?? 0}
+                    onChange={(e) => updateSubscription(s.id, { planSnapshot: { ...s.planSnapshot, durationDays: +e.target.value || undefined } })} />
                 </label>
                 <label>시간(h)
                   <input className="input mt-1" type="number" min={0} value={s.planSnapshot.hours ?? 0}

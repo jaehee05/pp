@@ -8,7 +8,7 @@ import type { Seat } from '../lib/types';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
-import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../lib/sub';
+import { ddayLabel, ddayOf, expiryShort, currentSubOf, lastActiveEndOf } from '../lib/sub';
 import { fmtDateTime } from '../lib/format';
 import { firestoreStorage } from '../lib/firestoreStorage';
 import { liveAppState } from '../lib/firestoreSync';
@@ -91,8 +91,6 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
   const students = useStudents((s) => s.list);
   const attState = useAttendance((s) => s.state);
   const subs = usePlans((s) => s.subs);
-  const addSubscription = usePlans((s) => s.addSubscription);
-  const plans = usePlans((s) => s.plans);
   const nav = useNavigate();
 
   const [ctxMenu, setCtxMenu] = useState<{ seatId: string; x: number; y: number } | null>(null);
@@ -248,35 +246,14 @@ export function SeatsPage({ editable = true }: { editable?: boolean } = {}) {
     }
   }
 
-  function confirmAssign(data: { studentId: string; useExisting: boolean; planId?: string; startAt?: number; durationDays?: number; durationMonths?: number }) {
+  function confirmAssign(data: { studentId: string }) {
     const seat = seats.find((s) => s.id === assignSeatId);
     if (!seat) return;
-    // 신규 구매면 Subscription 생성, 기존 사용이면 스킵 (좌석 배정만)
-    if (!data.useExisting) {
-      const plan = plans.find((p) => p.id === data.planId);
-      if (!plan || !data.startAt) return;
-      // 갱신 처리: 기존 active 이용권이 아직 안 끝났으면, 새 이용권은 기존 종료일 다음날 00:00 부터 시작
-      const futureEnds = subs
-        .filter((s) => s.studentId === data.studentId && s.status === 'active' && s.endAt && s.endAt > Date.now())
-        .map((s) => s.endAt as number);
-      const latestEnd = futureEnds.length > 0 ? Math.max(...futureEnds) : null;
-      const actualStartAt = latestEnd ? nextDayStart(latestEnd) : data.startAt;
-      const endAt = computeEndAt(actualStartAt, { durationDays: data.durationDays, durationMonths: data.durationMonths });
-      addSubscription({
-        studentId: data.studentId,
-        planId: plan.id,
-        planSnapshot: {
-          name: plan.name, type: plan.type,
-          durationDays: plan.durationDays, durationMonths: plan.durationMonths,
-          hours: plan.hours, counts: plan.counts,
-          price: plan.price,
-        },
-        startAt: actualStartAt,
-        endAt,
-        hoursRemaining: plan.hours,
-        countsRemaining: plan.counts,
-        status: 'active',
-      });
+    // 좌석 배정은 기존 활성 이용권이 있는 회원만 가능 — AssignStudentModal 에서 가드됨.
+    const hasActive = subs.some((s) => s.studentId === data.studentId && s.status === 'active');
+    if (!hasActive) {
+      alert('활성 이용권이 없는 회원은 좌석 배정할 수 없습니다.');
+      return;
     }
     const history = seat.assignmentHistory ?? [];
     setSeats((prev) => prev.map((s) =>

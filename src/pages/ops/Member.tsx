@@ -8,6 +8,7 @@ import { usePlans } from '../../store/plans';
 import { deviceAgent } from '../../lib/deviceAgent';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../../lib/sub';
+import { useSeats, seatOfStudent, assignSeatToStudent } from '../../lib/useSeats';
 
 type LogTab = 'member' | 'use' | 'pay';
 
@@ -82,6 +83,15 @@ export function OpsMember() {
 
   // 기타결제 / 할인 모달
   const [etcModal, setEtcModal] = useState<'etc' | 'discount' | null>(null);
+
+  // 좌석 배정 모달 — 이용권 구매 직후 학생에게 배정된 좌석 없으면 자동 오픈.
+  const seats = useSeats();
+  const [seatPickOpen, setSeatPickOpen] = useState(false);
+  function promptSeatPickIfNeeded() {
+    if (!student) return;
+    if (seatOfStudent(seats, student.id)) return; // 이미 배정된 좌석 있음
+    setSeatPickOpen(true);
+  }
 
   useEffect(() => {
     const off = deviceAgent.on((e) => {
@@ -333,6 +343,7 @@ export function OpsMember() {
       setPayStatus(`✅ 현금 결제 완료 (${orderTotal.toLocaleString()}원)`);
       setOrder([]);
       setPayments([{ method: 'card', amount: 0 }]);
+      promptSeatPickIfNeeded();
     } catch (e) {
       setPayStatus(`오류: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -478,6 +489,7 @@ export function OpsMember() {
     markPendingOrderApplied(po.id, subIds, payId);
     setPayStatus(`✅ 양쪽 결제 완료 — 이용권 ${subIds.length}건 자동 활성화됨`);
     setTimeout(() => setPayStatus(''), 6000);
+    promptSeatPickIfNeeded();
   }
 
   async function processPayment() {
@@ -1247,6 +1259,56 @@ export function OpsMember() {
         title="할인 추가" labelA="할인 사유" labelB="할인 금액"
         onSubmit={(n, amt) => addDiscount(n, amt)}
       />
+
+      {/* 좌석 배정 모달 — 이용권 구매 직후 좌석 없으면 자동 오픈 */}
+      <Modal
+        open={seatPickOpen}
+        onClose={() => setSeatPickOpen(false)}
+        title={`좌석 배정 — ${student.name}`}
+        width="max-w-2xl"
+        footer={
+          <button className="btn-secondary" onClick={() => setSeatPickOpen(false)}>나중에</button>
+        }
+      >
+        <div className="space-y-3 text-sm">
+          <p className="text-xs text-slate-600">
+            이용권 구매 완료. <b>{student.name}</b> 님에게 배정할 좌석을 선택하세요.
+            (지금 선택 안 하면 [나중에] — 배치도 페이지에서 직접 배정 가능)
+          </p>
+          {(() => {
+            const free = seats
+              .filter((s) => s.type === 'seat' && !s.assignedStudentId && s.active !== false)
+              .sort((a, b) => (parseInt(a.label) || 0) - (parseInt(b.label) || 0));
+            if (free.length === 0) {
+              return <p className="rounded-md bg-amber-50 p-3 text-amber-700">배정 가능한 빈 좌석이 없습니다. 배치도에서 좌석을 추가하거나 배정 해제 후 다시 시도하세요.</p>;
+            }
+            return (
+              <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8">
+                {free.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    className="rounded-md bg-white px-2 py-3 text-sm ring-1 ring-slate-300 hover:bg-brand-50 hover:ring-brand-500"
+                    onClick={async () => {
+                      const ok = await assignSeatToStudent(s.id, student.id);
+                      if (ok) {
+                        setSeatPickOpen(false);
+                        setPayStatus(`🪑 좌석 ${s.label} 배정 완료`);
+                        setTimeout(() => setPayStatus(''), 4000);
+                      } else {
+                        alert('좌석 배정 실패. 다시 시도해주세요.');
+                      }
+                    }}
+                  >
+                    <div className="font-bold">{s.label}</div>
+                    {s.tag && <div className="mt-0.5 text-[10px] text-slate-500">{s.tag}</div>}
+                  </button>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      </Modal>
     </>
   );
 }

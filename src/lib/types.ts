@@ -30,6 +30,10 @@ export interface Student {
   // 입실 예정 시간 (요일별, "HH:mm" 또는 null)
   schedule: Partial<Record<WeekdayKey, { start: string; end: string } | null>>;
 
+  // 학원&과외 일정표 — 종이로 받던 걸 디지털화. 요일별 하루 일정(입퇴실 시각 + 오전/오후/저녁 활동).
+  // schedule 필드와 별개 — 이건 학생이 스스로 등록하는 세부 시간표.
+  weeklyPlan?: Partial<Record<WeekdayKey, DayPlan>>;
+
   // 지문 ID (디바이스 에이전트에서 발급)
   fingerprintId?: string;
   // 페이스패스(Toss FacePass) ID — 토스 Front Plugin enroll 완료 콜백으로 채워짐.
@@ -41,6 +45,22 @@ export interface Student {
   status: 'active' | 'leaving' | 'paused' | 'left';
   joinedAt: TS;
   pointsTotal: number; // 누적 상-벌점 합
+}
+
+// 요일별 상세 일정 (학원&과외 일정표).
+// 오전(08~12) / 오후(12~19) / 저녁(19~24) 3개 활동 블록 + 각 사이 합공(독서실) 입퇴실 시각.
+export interface DayPlan {
+  initialEnter?: string;      // "HH:mm" — 아침 첫 합공 입실
+  morningExit?: string;       // 오전 일정 전 퇴실
+  morningActivity?: string;   // 오전 활동 내용 (예: "수학 과외")
+  morningReenter?: string;    // 오전 후 재입실
+  afternoonExit?: string;     // 오후 일정 전 퇴실
+  afternoonActivity?: string;
+  afternoonReenter?: string;
+  eveningExit?: string;
+  eveningActivity?: string;
+  eveningReenter?: string;
+  closingExit?: string;       // 마감 퇴실
 }
 
 // ---------- 좌석 ----------

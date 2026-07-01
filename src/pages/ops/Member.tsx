@@ -9,8 +9,25 @@ import { deviceAgent } from '../../lib/deviceAgent';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../../lib/sub';
 import { useSeats, seatOfStudent, assignSeatToStudent } from '../../lib/useSeats';
+import { WEEKDAYS, WEEKDAY_LABEL, type WeekdayKey, type DayPlan } from '../../lib/types';
 
 type LogTab = 'member' | 'use' | 'pay';
+
+// 학원&과외 일정표의 행 정의. 종이 양식과 동일한 순서.
+interface WeeklyRow { label: string; field: keyof DayPlan; kind: 'time' | 'text'; hint?: string }
+const WEEKLY_ROWS: WeeklyRow[] = [
+  { label: '합공 입실시간', field: 'initialEnter', kind: 'time' },
+  { label: '합공 퇴실시간', field: 'morningExit', kind: 'time' },
+  { label: '오전 일정', field: 'morningActivity', kind: 'text', hint: '08:00~12:00' },
+  { label: '합공 (재)입실시간', field: 'morningReenter', kind: 'time' },
+  { label: '합공 퇴실시간', field: 'afternoonExit', kind: 'time' },
+  { label: '오후 일정', field: 'afternoonActivity', kind: 'text', hint: '12:00~19:00' },
+  { label: '합공 (재)입실시간', field: 'afternoonReenter', kind: 'time' },
+  { label: '합공 퇴실시간', field: 'eveningExit', kind: 'time' },
+  { label: '저녁 일정', field: 'eveningActivity', kind: 'text', hint: '19:00~24:00' },
+  { label: '합공 (재)입실시간', field: 'eveningReenter', kind: 'time' },
+  { label: '마감 퇴실시간', field: 'closingExit', kind: 'time' },
+];
 
 interface OrderItem {
   id: string;
@@ -132,6 +149,34 @@ export function OpsMember() {
     else att.enter(student.id, 'manual');
   }
   function saveMemo() { update(student!.id, { memo }); }
+
+  // === 학원&과외 일정표 (WeeklyPlan) ===
+  // student.weeklyPlan 을 draft 에 로컬 편집 → [저장] 클릭 시 update.
+  const [weeklyDraft, setWeeklyDraft] = useState<Partial<Record<WeekdayKey, DayPlan>>>(student?.weeklyPlan ?? {});
+  const [weeklyOpen, setWeeklyOpen] = useState(false);
+  useEffect(() => {
+    setWeeklyDraft(student?.weeklyPlan ?? {});
+  }, [student?.id, student?.weeklyPlan]);
+  function setDayField(day: WeekdayKey, field: keyof DayPlan, value: string) {
+    setWeeklyDraft((prev) => {
+      const cur = prev[day] ?? {};
+      const next: DayPlan = { ...cur, [field]: value };
+      // 빈값 필드만 있으면 요일 entry 자체 제거해 데이터 정리.
+      const anyValue = Object.values(next).some((x) => x && String(x).length > 0);
+      const merged: Partial<Record<WeekdayKey, DayPlan>> = { ...prev };
+      if (anyValue) merged[day] = next;
+      else delete merged[day];
+      return merged;
+    });
+  }
+  function saveWeekly() {
+    if (!student) return;
+    update(student.id, { weeklyPlan: weeklyDraft });
+  }
+  function clearWeekly() {
+    if (!confirm('일정표 전체를 비울까요?')) return;
+    setWeeklyDraft({});
+  }
   function startEnroll() {
     if (!student) return;
     setEnrolling(true);
@@ -692,6 +737,86 @@ export function OpsMember() {
           <div className="mt-2 flex justify-end">
             <button className="rounded-md bg-white px-4 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-100" onClick={saveMemo}>저장</button>
           </div>
+        </section>
+
+        {/* 학원&과외 일정표 */}
+        <section className="card p-6">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="font-semibold">📋 학원&과외 일정표</h3>
+            <button
+              type="button"
+              className="rounded-md bg-white px-3 py-1.5 text-xs ring-1 ring-slate-300 hover:bg-slate-50"
+              onClick={() => setWeeklyOpen((v) => !v)}
+            >{weeklyOpen ? '접기 ▲' : '펼치기 ▼'}</button>
+          </div>
+          {weeklyOpen && (
+            <>
+              <p className="mb-3 text-xs text-slate-500">
+                학생이 종이에 쓰던 학원&과외 일정을 여기에 입력. 요일별 합공 입퇴실 시각과 오전/오후/저녁 활동을 저장.
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse text-xs">
+                  <thead>
+                    <tr>
+                      <th className="border border-slate-200 bg-slate-100 px-2 py-1.5 text-left font-semibold text-slate-700">구분</th>
+                      {WEEKDAYS.map((d) => (
+                        <th key={d} className="border border-slate-200 bg-slate-100 px-2 py-1.5 text-center font-semibold text-slate-700">
+                          {WEEKDAY_LABEL[d]}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {WEEKLY_ROWS.map((row) => (
+                      <tr key={row.field}>
+                        <td className={`border border-slate-200 px-2 py-1.5 font-semibold text-slate-700 ${
+                          row.kind === 'text' ? 'bg-amber-50' : 'bg-slate-50'
+                        }`}>
+                          {row.label}
+                          {row.hint && <div className="text-[10px] font-normal text-slate-400">{row.hint}</div>}
+                        </td>
+                        {WEEKDAYS.map((d) => {
+                          const value = weeklyDraft[d]?.[row.field] ?? '';
+                          return (
+                            <td key={d} className="border border-slate-200 p-0.5">
+                              {row.kind === 'time' ? (
+                                <input
+                                  type="time"
+                                  className="w-full rounded border-0 bg-transparent px-1 py-1 text-center text-xs focus:bg-brand-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  value={value}
+                                  onChange={(e) => setDayField(d, row.field, e.target.value)}
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  className="w-full rounded border-0 bg-transparent px-1 py-1 text-xs focus:bg-brand-50 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                                  value={value}
+                                  placeholder="활동 내용"
+                                  onChange={(e) => setDayField(d, row.field, e.target.value)}
+                                />
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-3 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md bg-white px-3 py-1.5 text-xs text-rose-600 ring-1 ring-rose-300 hover:bg-rose-50"
+                  onClick={clearWeekly}
+                >전체 지우기</button>
+                <button
+                  type="button"
+                  className="rounded-md bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
+                  onClick={saveWeekly}
+                >저장</button>
+              </div>
+            </>
+          )}
         </section>
 
         {/* 서비스 이용 정보 */}

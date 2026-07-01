@@ -29,6 +29,7 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
   const upsert = usePlans((s) => s.upsertPlan);
   const remove = usePlans((s) => s.removePlan);
   const reorder = usePlans((s) => s.reorderPlan);
+  const reapplyPlanToSubs = usePlans((s) => s.reapplyPlanToSubs);
 
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -81,7 +82,20 @@ export function PlansPage({ category }: { category: 'seat' | 'room' }) {
       <PageHeader
         title={category === 'seat' ? '좌석 이용권 관리' : '룸/사물함 이용권 관리'}
         desc="과세/비과세 분리, 할인정책, 사물함 포함 여부 등을 관리합니다."
-        actions={<button className="btn-primary" onClick={newPlan}>+ 이용권 추가</button>}
+        actions={
+          <>
+            <button
+              className="mr-2 rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50"
+              title="이용권을 수정한 뒤, 이 버튼을 누르면 기존 회원들의 활성 이용권 만료일을 현재 이용권 설정으로 다시 계산합니다."
+              onClick={() => {
+                if (!confirm('기존 활성 이용권들의 만료일을 현재 이용권 설정으로 일괄 재계산합니다.\n(수동으로 조정했던 만료일은 덮어씌워집니다)\n\n진행할까요?')) return;
+                const n = reapplyPlanToSubs();
+                alert(`✓ ${n}건의 이용권 만료일이 갱신되었습니다.`);
+              }}
+            >🔁 이용권 만료일 일괄 재계산</button>
+            <button className="btn-primary" onClick={newPlan}>+ 이용권 추가</button>
+          </>
+        }
       />
 
       <div className="p-6">

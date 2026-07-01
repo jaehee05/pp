@@ -69,6 +69,7 @@ interface State {
   addSubscription: (s: Omit<LocalSub, 'id'>) => string;
   updateSubscription: (id: string, patch: Partial<LocalSub>) => void;
   removeSubscription: (id: string) => void;
+  reapplyPlanToSubs: () => number;   // 활성 sub 의 endAt+planSnapshot 을 현재 plan 설정으로 강제 재계산. 갱신 건수 반환.
   addPendingOrder: (o: Omit<PendingOrder, 'id' | 'createdAt' | 'status'>) => string;
   updateInvoiceStatus: (orderId: string, invoiceId: string, status: InvoicePart['status']) => void;
   markPendingOrderApplied: (orderId: string, subIds: string[], payId: string) => void;
@@ -221,6 +222,42 @@ export const usePlans = create<State>()(
         }),
       })),
       removeSubscription: (id) => set((st) => ({ subs: st.subs.filter((s) => s.id !== id) })),
+
+      reapplyPlanToSubs: () => {
+        let count = 0;
+        set((st) => {
+          const updated = st.subs.map((s) => {
+            if (s.status !== 'active') return s;
+            if (!s.startAt) return s;
+            const plan = st.plans.find((p) => p.id === s.planId);
+            if (!plan || plan.type !== 'period') return s;
+            let newEnd: number | undefined;
+            if (plan.durationMonths && plan.durationMonths > 0) {
+              newEnd = addMonthsKstClampedFix(s.startAt, plan.durationMonths) - 86400000;
+            } else if (plan.durationDays && plan.durationDays > 0) {
+              newEnd = s.startAt + (plan.durationDays - 1) * 86400000;
+            } else {
+              return s;
+            }
+            const snapChanged =
+              s.planSnapshot.durationDays !== plan.durationDays ||
+              s.planSnapshot.durationMonths !== plan.durationMonths;
+            if (newEnd === s.endAt && !snapChanged) return s;
+            count += 1;
+            return {
+              ...s,
+              endAt: newEnd,
+              planSnapshot: {
+                ...s.planSnapshot,
+                durationDays: plan.durationDays,
+                durationMonths: plan.durationMonths,
+              },
+            };
+          });
+          return { subs: updated };
+        });
+        return count;
+      },
 
       addPendingOrder: (o) => {
         const id = `po_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;

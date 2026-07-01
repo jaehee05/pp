@@ -41,7 +41,12 @@ export function AttendancePage() {
         alert(`오류: ${data.error ?? res.status}`);
         return;
       }
-      alert(`✓ 스캔 완료\n검사: ${data.scanned} · 발송: ${data.sent} · 이미 처리됨: ${data.deduped} · 이미 입실: ${data.present}`);
+      // firebase-admin 미설정 등 mock 응답
+      if (data.mock || data.note) {
+        alert(`⚠️ 스캔 미실행\n\n서버 응답: ${data.note ?? 'mock 모드'}\n\n조치: Vercel 환경변수 GOOGLE_APPLICATION_CREDENTIALS_JSON + FIREBASE_PROJECT_ID 를 등록하고 재배포하세요.`);
+        return;
+      }
+      alert(`✓ 스캔 완료 (${data.dateStr} ${data.today})\n검사: ${data.scanned ?? 0} · 발송: ${data.sent ?? 0} · 이미 처리됨: ${data.deduped ?? 0} · 이미 입실: ${data.present ?? 0}`);
     } catch (e) {
       alert(`오류: ${e instanceof Error ? e.message : String(e)}`);
     }

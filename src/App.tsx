@@ -11,6 +11,7 @@ import { MessagesBalance } from './pages/admin/MessagesBalance';
 import { PpurioSettingsPage } from './pages/admin/PpurioSettings';
 import { BulkImportPage } from './pages/admin/BulkImport';
 import { HelpPage } from './pages/admin/Help';
+import { AttendancePage } from './pages/Attendance';
 import { SeatsPage } from './pages/Seats';
 import { OpsRegister } from './pages/ops/Register';
 import { OpsMember } from './pages/ops/Member';
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="bulk-import" element={<BulkImportPage />} />
           <Route path="help" element={<HelpPage />} />
           <Route path="layouts/seats" element={<SeatsPage />} />
+          <Route path="attendance" element={<AttendancePage />} />
         </Route>
 
         <Route path="/ops" element={<RequireAuth><OpsLayout /></RequireAuth>}>

@@ -13,6 +13,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/admin/dashboard', label: '대시보드', icon: '◧' },
   { to: '/admin/members', label: '회원 관리', icon: '👤' },
+  { to: '/admin/attendance', label: '출입 현황', icon: '🚪' },
   {
     label: '매장 관리', icon: '🏬', children: [
       { to: '/admin/store/info', label: '매장 정보' },

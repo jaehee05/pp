@@ -21,6 +21,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { loadFirebaseAdmin } from '../_lib/firebaseAdmin';
 
 const APP_STATE_DOC = 'pp.plans.v1';
 
@@ -101,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!admin) {
     return res.status(200).json({ ok: true, mock: true, note: 'firebase-admin not configured; event accepted but not applied' });
   }
-  const db = admin.firestore();
+  const db = admin.firestore() as ReturnType<FirebaseAdminLike['firestore']>;
 
   // 6) 멱등성 — 이미 처리된 webhookId 면 스킵.
   if (webhookId) {
@@ -172,35 +173,6 @@ interface FirebaseAdminLike {
       };
     };
   };
-}
-
-async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
-  try {
-    const mod = await import('firebase-admin');
-    const admin = (mod as { default?: unknown }).default ?? mod;
-    const adminAny = admin as {
-      apps: unknown[];
-      initializeApp: (opts: Record<string, unknown>) => unknown;
-      credential: { cert: (sa: Record<string, unknown>) => unknown; applicationDefault: () => unknown };
-      firestore: () => FirebaseAdminLike['firestore'] extends () => infer R ? R : never;
-    };
-    if (!adminAny.apps?.length) {
-      const saJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-      let credential: unknown;
-      if (saJson) {
-        const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
-        const sa = JSON.parse(decoded);
-        credential = adminAny.credential.cert(sa);
-      } else {
-        credential = adminAny.credential.applicationDefault();
-      }
-      const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FB_PROJECT_ID ?? process.env.GCLOUD_PROJECT;
-      adminAny.initializeApp({ credential, projectId });
-    }
-    return { firestore: () => adminAny.firestore() } as unknown as FirebaseAdminLike;
-  } catch {
-    return null;
-  }
 }
 
 async function applyApprovedPayment(

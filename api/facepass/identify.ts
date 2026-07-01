@@ -12,6 +12,7 @@
 // 환경 (옵션): FACEPASS_CALLBACK_SECRET (헤더 x-facepass-secret 비교)
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { loadFirebaseAdmin } from '../_lib/firebaseAdmin';
 
 const STUDENTS_DOC = 'pp.students.v1';
 const ATTENDANCE_DOC = 'pp.attendance.v1';
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!admin) {
     return res.status(200).json({ ok: true, mock: true, note: 'firebase-admin not configured; identify accepted but not persisted' });
   }
-  const db = admin.firestore();
+  const db = admin.firestore() as ReturnType<FirebaseAdminLike['firestore']>;
 
   const studentId = await findStudentByFaceId(db, faceId);
   if (!studentId) return res.status(404).json({ ok: false, error: 'student not found for faceId' });
@@ -112,35 +113,6 @@ interface FirebaseAdminLike {
       };
     };
   };
-}
-
-async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
-  try {
-    const mod = await import('firebase-admin');
-    const admin = (mod as { default?: unknown }).default ?? mod;
-    const adminAny = admin as {
-      apps: unknown[];
-      initializeApp: (opts: Record<string, unknown>) => unknown;
-      credential: { cert: (sa: Record<string, unknown>) => unknown; applicationDefault: () => unknown };
-      firestore: () => unknown;
-    };
-    if (!adminAny.apps?.length) {
-      const saJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-      let credential: unknown;
-      if (saJson) {
-        const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
-        const sa = JSON.parse(decoded);
-        credential = adminAny.credential.cert(sa);
-      } else {
-        credential = adminAny.credential.applicationDefault();
-      }
-      const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FB_PROJECT_ID ?? process.env.GCLOUD_PROJECT;
-      adminAny.initializeApp({ credential, projectId });
-    }
-    return { firestore: () => adminAny.firestore() } as unknown as FirebaseAdminLike;
-  } catch {
-    return null;
-  }
 }
 
 async function findStudentByFaceId(db: ReturnType<FirebaseAdminLike['firestore']>, faceId: string): Promise<string | null> {

@@ -269,13 +269,19 @@ export const usePlans = create<State>()(
 );
 
 // 하이드레이션 완료 후 sub.endAt 마이그레이션이 무언가 바꿨을 수 있으므로 persist write 트리거.
-// **안전 가드**: subs 가 이미 비어있으면 (하이드레이션 실패해서 defaults 로 떨어졌거나 신규 매장)
-// setState 하지 않음 — 그래야 빈 상태로 Firestore 덮어쓰는 사고 (이전 데이터 손실 사고 원인) 재발 방지.
-usePlans.persist.onFinishHydration?.((hydrated) => {
-  const s = hydrated as Partial<State> | undefined;
-  if (!s || !Array.isArray(s.subs) || s.subs.length === 0) return;
+// **안전 가드**: subs 가 이미 비어있으면 setState 하지 않음 — 빈 상태로 Firestore 덮어쓰는
+// 사고 재발 방지.
+const triggerMigrationWrite = () => {
+  const s = usePlans.getState() as Partial<State>;
+  if (!Array.isArray(s.subs) || s.subs.length === 0) return;
   usePlans.setState((prev) => ({ ...prev }));
-});
+};
+// hydration 이 이미 끝났을 수 있으므로 두 경로 다 등록.
+if (usePlans.persist.hasHydrated?.()) {
+  setTimeout(triggerMigrationWrite, 0);
+} else {
+  usePlans.persist.onFinishHydration?.(() => setTimeout(triggerMigrationWrite, 0));
+}
 
 // 외부(토스플레이스 웹훅 등)에서 appState/pp.plans.v1 을 직접 갱신했을 때 자동 rehydrate.
 subscribeExternalUpdates(STORE_NAME, () => usePlans.persist.rehydrate());

@@ -60,7 +60,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const admin = await loadFirebaseAdmin();
   if (!admin) {
-    return res.status(200).json({ ok: true, mock: true, note: 'firebase-admin not configured' });
+    return res.status(200).json({
+      ok: true,
+      mock: true,
+      note: firebaseInitError ?? 'firebase-admin not configured',
+      hint: 'Vercel Settings → Environment Variables 에서 GOOGLE_APPLICATION_CREDENTIALS_JSON + FIREBASE_PROJECT_ID 확인 후 Redeploy',
+    });
   }
   const db = admin.firestore();
 
@@ -190,6 +195,7 @@ interface FirebaseAdminLike {
   };
 }
 
+let firebaseInitError: string | null = null;
 async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
   try {
     const mod = await import('firebase-admin');
@@ -204,17 +210,33 @@ async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
       const saJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
       let credential: unknown;
       if (saJson) {
-        const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
-        const sa = JSON.parse(decoded);
-        credential = adminAny.credential.cert(sa);
+        try {
+          const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
+          const sa = JSON.parse(decoded);
+          credential = adminAny.credential.cert(sa);
+        } catch (e) {
+          firebaseInitError = `sa JSON parse failed: ${e instanceof Error ? e.message : String(e)}`;
+          return null;
+        }
       } else {
-        credential = adminAny.credential.applicationDefault();
+        firebaseInitError = 'GOOGLE_APPLICATION_CREDENTIALS_JSON env var missing/empty';
+        return null;
       }
       const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FB_PROJECT_ID ?? process.env.GCLOUD_PROJECT;
-      adminAny.initializeApp({ credential, projectId });
+      if (!projectId) {
+        firebaseInitError = 'FIREBASE_PROJECT_ID env var missing';
+        return null;
+      }
+      try {
+        adminAny.initializeApp({ credential, projectId });
+      } catch (e) {
+        firebaseInitError = `initializeApp failed: ${e instanceof Error ? e.message : String(e)}`;
+        return null;
+      }
     }
     return { firestore: () => adminAny.firestore() } as unknown as FirebaseAdminLike;
-  } catch {
+  } catch (e) {
+    firebaseInitError = `firebase-admin module load failed: ${e instanceof Error ? e.message : String(e)}`;
     return null;
   }
 }

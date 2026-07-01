@@ -43,7 +43,7 @@ export function AttendancePage() {
       }
       // firebase-admin 미설정 등 mock 응답
       if (data.mock || data.note) {
-        alert(`⚠️ 스캔 미실행\n\n서버 응답: ${data.note ?? 'mock 모드'}\n\n조치: Vercel 환경변수 GOOGLE_APPLICATION_CREDENTIALS_JSON + FIREBASE_PROJECT_ID 를 등록하고 재배포하세요.`);
+        alert(`⚠️ 스캔 미실행\n\n원인: ${data.note ?? 'mock 모드'}\n${data.hint ? '조치: ' + data.hint : ''}`);
         return;
       }
       alert(`✓ 스캔 완료 (${data.dateStr} ${data.today})\n검사: ${data.scanned ?? 0} · 발송: ${data.sent ?? 0} · 이미 처리됨: ${data.deduped ?? 0} · 이미 입실: ${data.present ?? 0}`);

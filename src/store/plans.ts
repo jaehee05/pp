@@ -266,12 +266,5 @@ export const usePlans = create<State>()(
   ),
 );
 
-// 하이드레이션 완료 직후, 마이그레이션이 sub.endAt 등을 바꿨을 수 있으므로
-// 강제 setState 로 persist write 를 한 번 트리거 → Firestore 에 보정 결과 즉시 반영.
-// (no-op 변경처럼 보여도 객체 참조 새로 만들면 persist 가 setItem 호출함)
-usePlans.persist.onFinishHydration?.(() => {
-  usePlans.setState((s) => ({ ...s }));
-});
-
 // 외부(토스플레이스 웹훅 등)에서 appState/pp.plans.v1 을 직접 갱신했을 때 자동 rehydrate.
 subscribeExternalUpdates(STORE_NAME, () => usePlans.persist.rehydrate());

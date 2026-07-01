@@ -11,6 +11,21 @@ export function OpsRegister() {
   const [v, setV] = useState(emptyStudent());
   const [enrolling, setEnrolling] = useState(false);
   const [newId, setNewId] = useState<string | null>(null);
+  // PIN 을 직접 입력한 적 있는지. false 면 phone 뒷 4자리로 자동 동기화.
+  const [pinTouched, setPinTouched] = useState(false);
+
+  function updatePhone(phone: string) {
+    const last4 = phone.replace(/\D/g, '').slice(-4);
+    setV((prev) => ({
+      ...prev,
+      phone,
+      pin: pinTouched ? prev.pin : (last4.length === 4 ? last4 : prev.pin),
+    }));
+  }
+  function updatePin(pin: string) {
+    setPinTouched(true);
+    setV((prev) => ({ ...prev, pin: pin.replace(/\D/g, '').slice(0, 4) }));
+  }
 
   function submit() {
     if (!v.name) return alert('성함은 필수입니다.');
@@ -52,7 +67,7 @@ export function OpsRegister() {
               </div>
             </Field>
             <Field label="연락처" required col={4}>
-              <input className="input" value={v.phone} onChange={(e) => setV({ ...v, phone: e.target.value })} />
+              <input className="input" value={v.phone} onChange={(e) => updatePhone(e.target.value)} />
             </Field>
             <Field label="메시지 수신" col={2}>
               <label className="flex h-9 items-center gap-2">
@@ -71,8 +86,8 @@ export function OpsRegister() {
               </div>
             </Field>
             <Field label="PIN번호" required col={6}>
-              <input className="input" maxLength={4} placeholder="4자리" value={v.pin}
-                onChange={(e) => setV({ ...v, pin: e.target.value.replace(/\D/g, '').slice(0, 4) })} />
+              <input className="input" maxLength={4} placeholder="4자리 (연락처 뒷자리 자동)" value={v.pin}
+                onChange={(e) => updatePin(e.target.value)} />
             </Field>
 
             <Field label="생년월일" required col={4}>

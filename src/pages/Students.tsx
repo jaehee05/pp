@@ -108,7 +108,12 @@ export function StudentsPage() {
         title="신규 학생 등록"
         initial={emptyStudent()}
         onClose={() => setOpenNew(false)}
-        onSubmit={(v) => { add(v); setOpenNew(false); }}
+        onSubmit={(v) => {
+          // 신규 등록 시 PIN 미입력이면 연락처 뒷 4자리 자동 세팅.
+          const pin = v.pin && v.pin.length === 4 ? v.pin : v.phone.replace(/\D/g, '').slice(-4);
+          add({ ...v, pin });
+          setOpenNew(false);
+        }}
       />
       <StudentFormModal
         open={!!editing}

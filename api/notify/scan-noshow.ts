@@ -18,7 +18,6 @@
 // GET / POST 다 허용 (Vercel Cron 은 GET).
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { loadFirebaseAdmin, lastFirebaseAdminError } from '../_lib/firebaseAdmin';
 
 type WeekdayKey = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
 type NoShowSlotKey = 'initialEnter' | 'morningReenter' | 'afternoonReenter' | 'eveningReenter';
@@ -48,6 +47,19 @@ interface AttendanceStateJson { state: Record<string, AttStateLike> }
 interface StudentsStateJson { list: StudentLike[] }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  try {
+    return await scanHandler(req, res);
+  } catch (e) {
+    console.error('[scan-noshow] uncaught', e);
+    return res.status(500).json({
+      ok: false,
+      error: e instanceof Error ? e.message : String(e),
+      stack: e instanceof Error ? e.stack?.split('\n').slice(0, 6) : undefined,
+    });
+  }
+}
+
+async function scanHandler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
@@ -194,6 +206,54 @@ interface FirebaseAdminLike {
       };
     };
   };
+}
+
+let lastFirebaseAdminError: string | null = null;
+let cachedFirebase: FirebaseAdminLike | null = null;
+async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
+  if (cachedFirebase) return cachedFirebase;
+  lastFirebaseAdminError = null;
+  try {
+    const appMod = await import('firebase-admin/app');
+    const fsMod = await import('firebase-admin/firestore');
+    const { initializeApp, getApps, cert } = appMod as unknown as {
+      initializeApp: (opts: Record<string, unknown>) => unknown;
+      getApps: () => unknown[];
+      cert: (sa: Record<string, unknown>) => unknown;
+    };
+    const { getFirestore } = fsMod as unknown as { getFirestore: () => unknown };
+    if (getApps().length === 0) {
+      const saJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+      if (!saJson) {
+        lastFirebaseAdminError = 'GOOGLE_APPLICATION_CREDENTIALS_JSON env var missing/empty';
+        return null;
+      }
+      let sa: Record<string, unknown>;
+      try {
+        const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
+        sa = JSON.parse(decoded);
+      } catch (e) {
+        lastFirebaseAdminError = `sa JSON parse failed: ${e instanceof Error ? e.message : String(e)}`;
+        return null;
+      }
+      const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FB_PROJECT_ID ?? process.env.GCLOUD_PROJECT ?? (sa.project_id as string | undefined);
+      if (!projectId) {
+        lastFirebaseAdminError = 'FIREBASE_PROJECT_ID env var missing (and none in service account JSON)';
+        return null;
+      }
+      try {
+        initializeApp({ credential: cert(sa), projectId });
+      } catch (e) {
+        lastFirebaseAdminError = `initializeApp failed: ${e instanceof Error ? e.message : String(e)}`;
+        return null;
+      }
+    }
+    cachedFirebase = { firestore: () => getFirestore() } as unknown as FirebaseAdminLike;
+    return cachedFirebase;
+  } catch (e) {
+    lastFirebaseAdminError = `firebase-admin module load failed: ${e instanceof Error ? e.message : String(e)}`;
+    return null;
+  }
 }
 
 async function readStore<T>(db: ReturnType<FirebaseAdminLike['firestore']>, name: string): Promise<T | null> {

@@ -36,12 +36,13 @@ export function AttendancePage() {
     if (!confirm('서버에서 미입실 스캔을 실행합니다. weeklyPlan 의 입실/재입실 슬롯을 훑어 미입실 학부모에게 SMS 를 발송합니다 (멱등 — 오늘 이미 발송한 슬롯은 스킵).\n\n진행할까요?')) return;
     try {
       const res = await fetch('/api/notify/scan-noshow', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        alert(`오류: ${data.error ?? res.status}`);
+      const raw = await res.text();
+      let data: Record<string, unknown> = {};
+      try { data = JSON.parse(raw); } catch { /* HTML/text 응답 */ }
+      if (!res.ok || data.ok === false) {
+        alert(`오류 (HTTP ${res.status}): ${data.error ?? raw.slice(0, 300)}`);
         return;
       }
-      // firebase-admin 미설정 등 mock 응답
       if (data.mock || data.note) {
         alert(`⚠️ 스캔 미실행\n\n원인: ${data.note ?? 'mock 모드'}\n${data.hint ? '조치: ' + data.hint : ''}`);
         return;

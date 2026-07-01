@@ -21,7 +21,6 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { loadFirebaseAdmin } from '../_lib/firebaseAdmin';
 
 const APP_STATE_DOC = 'pp.plans.v1';
 
@@ -173,6 +172,34 @@ interface FirebaseAdminLike {
       };
     };
   };
+}
+
+let cachedFirebase: FirebaseAdminLike | null = null;
+async function loadFirebaseAdmin(): Promise<FirebaseAdminLike | null> {
+  if (cachedFirebase) return cachedFirebase;
+  try {
+    const appMod = await import('firebase-admin/app');
+    const fsMod = await import('firebase-admin/firestore');
+    const { initializeApp, getApps, cert } = appMod as unknown as {
+      initializeApp: (opts: Record<string, unknown>) => unknown;
+      getApps: () => unknown[];
+      cert: (sa: Record<string, unknown>) => unknown;
+    };
+    const { getFirestore } = fsMod as unknown as { getFirestore: () => unknown };
+    if (getApps().length === 0) {
+      const saJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+      if (!saJson) return null;
+      const decoded = saJson.trim().startsWith('{') ? saJson : Buffer.from(saJson, 'base64').toString('utf8');
+      const sa = JSON.parse(decoded);
+      const projectId = process.env.FIREBASE_PROJECT_ID ?? process.env.VITE_FB_PROJECT_ID ?? process.env.GCLOUD_PROJECT ?? (sa.project_id as string | undefined);
+      initializeApp({ credential: cert(sa), projectId });
+    }
+    cachedFirebase = { firestore: () => getFirestore() } as unknown as FirebaseAdminLike;
+    return cachedFirebase;
+  } catch (e) {
+    console.error('[tossplace-webhook] firebase-admin load failed', e);
+    return null;
+  }
 }
 
 async function applyApprovedPayment(

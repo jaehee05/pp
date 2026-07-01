@@ -1,5 +1,11 @@
 {
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/" }
+  ],
+  "crons": [
+    {
+      "path": "/api/notify/scan-noshow",
+      "schedule": "*/10 * * * *"
+    }
   ]
 }

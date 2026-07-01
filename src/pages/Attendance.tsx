@@ -32,6 +32,20 @@ export function AttendancePage() {
     });
     alert(`${noShows.length}명 학부모에게 알림 발송 (콘솔/로그 확인)`);
   }
+  async function runServerScan() {
+    if (!confirm('서버에서 미입실 스캔을 실행합니다. weeklyPlan 의 입실/재입실 슬롯을 훑어 미입실 학부모에게 SMS 를 발송합니다 (멱등 — 오늘 이미 발송한 슬롯은 스킵).\n\n진행할까요?')) return;
+    try {
+      const res = await fetch('/api/notify/scan-noshow', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        alert(`오류: ${data.error ?? res.status}`);
+        return;
+      }
+      alert(`✓ 스캔 완료\n검사: ${data.scanned} · 발송: ${data.sent} · 이미 처리됨: ${data.deduped} · 이미 입실: ${data.present}`);
+    } catch (e) {
+      alert(`오류: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   return (
     <>
@@ -39,9 +53,16 @@ export function AttendancePage() {
         title="출입 현황"
         desc="실시간 입퇴실 및 미입실 학생"
         actions={
-          <button className="btn-primary" onClick={notifyAllNoShow} disabled={noShows.length === 0}>
-            미입실 {noShows.length}명에게 알림 발송
-          </button>
+          <>
+            <button
+              className="mr-2 rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50"
+              onClick={runServerScan}
+              title="서버 크론과 동일한 로직으로 지금 즉시 스캔 (weeklyPlan 4개 슬롯 검사, 멱등)"
+            >🔄 서버 스캔 실행</button>
+            <button className="btn-primary" onClick={notifyAllNoShow} disabled={noShows.length === 0}>
+              미입실 {noShows.length}명에게 알림 발송
+            </button>
+          </>
         }
       />
 

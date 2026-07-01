@@ -21,6 +21,33 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_027',
+    title: 'v1.0.27 — 미입실 자동 스캔 + weeklyPlan 4개 슬롯 알림',
+    date: '2026-07-02',
+    body: `## 새 기능
+- **미입실 자동 감지 & 학부모 SMS 발송**을 서버 크론으로 처리.
+- \`/api/notify/scan-noshow\` 엔드포인트가 매 10분마다 실행 (\`vercel.json\` 크론).
+- 학생의 **학원&과외 일정표(weeklyPlan)** 오늘 요일에 있는 4개 입실/재입실 시각(아침 첫 입실 / 오전·오후·저녁 후 재입실) 각각에 대해:
+  1. 시각 + 15분(grace) 지났는지 확인
+  2. 학생의 현재 상태가 'in' 또는 'temp_out' 이 아니면 미입실 판정
+  3. 학부모 SMS 발송 (\`/api/notify/send\` 경유 → PPURIO)
+  4. Firestore \`noShowNotified/{YYYY-MM-DD}_{studentId}_{slotKey}\` 문서 남겨 **멱등 보장** (오늘 이미 발송한 슬롯은 스킵)
+- weeklyPlan 없는 학생은 legacy \`student.schedule\` 로 fallback (기존 흐름 유지).
+- 학생/학부모 알림 수신 설정(\`parentLateMiss\`, \`parentMsgReceive\`) 존중.
+
+## UI
+- 출입 현황 페이지 상단에 [🔄 서버 스캔 실행] 버튼 추가 — 크론을 기다리지 않고 즉시 서버 스캔 트리거. 결과(검사 / 발송 / 이미 처리됨 / 이미 입실) 요약 알림.
+
+## 환경
+- \`CRON_SECRET\` — Vercel Cron 인증용 (Authorization Bearer). 운영에선 반드시 설정.
+- \`NOTIFY_BASE_URL\` — 커스텀 도메인 사용 시 명시. 기본은 \`https://\${VERCEL_URL}\`.
+
+## 주의
+- Vercel Hobby 플랜은 크론이 하루 1회로 제한 — 10분 간격 스캔은 Pro 플랜 필요. Hobby 라면 [🔄 서버 스캔 실행] 버튼으로 수동 사용 가능.`,
+    createdAt: Date.parse('2026-07-02'),
+    updatedAt: Date.parse('2026-07-02'),
+  },
+  {
     slug: 'v1_026',
     title: 'v1.0.26 — 학원&과외 일정표 (WeeklyPlan) 디지털 입력',
     date: '2026-07-02',

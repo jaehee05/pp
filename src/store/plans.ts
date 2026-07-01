@@ -101,44 +101,47 @@ function migrateMonthDuration(list: LocalPlan[]): LocalPlan[] {
   });
 }
 
-// 1개월 이용권인데 endAt 이 "시작 월의 마지막 날 - 1" 로 들어가 있는 기존 sub 보정.
-// 예: 7/1 시작 + (구) durationDays=30 → 7/30 만료. 캘린더 1개월 기준으로는 7/31 이어야 함.
-// 조건 (보수적):
-//   - status === 'active'
-//   - startAt KST = (어떤 달의) 1일 00:00
-//   - endAt KST = (같은 달의) 마지막 날 - 1 일
-//   - planSnapshot 이 1개월 플랜 패턴 (durationMonths===1 또는 durationDays===30 + 이름에 "개월/달")
-// 위 조건 모두 만족 시 endAt 을 해당 월의 마지막 날 KST 00:00 으로 보정. 멱등.
+// 1개월 이용권의 endAt 이 구 durationDays=30 공식 (startAt + 29일) 으로 박혀있으면
+// 캘린더 1개월 공식 (같은 날짜 다음달 - 1일, 대상 월에 같은 day 없으면 마지막 날 클램프) 로 보정.
+// 예:
+//   7/1 시작: 7/30 → 7/31
+//   7/15 시작: 8/13 → 8/14
+//   2/1 (비윤년) 시작: 3/2 → 2/28  (오히려 짧아짐)
+// 조건: status='active' + planSnapshot 이 1개월 플랜 패턴 + endAt 이 정확히 구 공식 결과.
+// 수동 조정된 sub 는 endAt 이 구 공식과 안 맞으므로 안 건드림.
 const KST_OFFSET_MS_FIX = 9 * 60 * 60 * 1000;
+function addMonthsKstClampedFix(startAt: number, months: number): number {
+  const start = new Date(startAt + KST_OFFSET_MS_FIX);
+  const y = start.getUTCFullYear();
+  const m = start.getUTCMonth();
+  const day = start.getUTCDate();
+  const totalMonths = m + months;
+  const newY = y + Math.floor(totalMonths / 12);
+  const newM = ((totalMonths % 12) + 12) % 12;
+  const lastDay = new Date(Date.UTC(newY, newM + 1, 0)).getUTCDate();
+  const newDay = Math.min(day, lastDay);
+  return Date.UTC(newY, newM, newDay) - KST_OFFSET_MS_FIX;
+}
 function migrateMonthlySubEndAt(subs: LocalSub[]): LocalSub[] {
   return subs.map((s) => {
     if (s.status !== 'active') return s;
     if (!s.startAt || !s.endAt) return s;
 
-    const startKst = new Date(s.startAt + KST_OFFSET_MS_FIX);
-    if (startKst.getUTCDate() !== 1) return s;
-    const y = startKst.getUTCFullYear();
-    const m = startKst.getUTCMonth();
-
-    // 같은 달 안에 있는 endAt 만 대상.
-    const endKst = new Date(s.endAt + KST_OFFSET_MS_FIX);
-    if (endKst.getUTCFullYear() !== y || endKst.getUTCMonth() !== m) return s;
-
-    const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
-    const properEnd = Date.UTC(y, m, lastDay) - KST_OFFSET_MS_FIX;
-    if (s.endAt === properEnd) return s;                          // 이미 맞음
-    const oneDayBeforeLast = properEnd - 86400000;
-    if (s.endAt !== oneDayBeforeLast) return s;                   // 끝-1일 패턴만
-
     const snap = s.planSnapshot ?? {} as LocalSub['planSnapshot'];
-    // 1개월 이용권 판단: durationMonths=1 이 정석. durationDays=30 도 (이름에 "N일"
-    // 명시된 경우 제외하고) 캘린더 1개월로 간주. 학원 도메인 상 30일 flat 이용권은 없음.
     const looksLikeMonthlyPlan =
       snap.durationMonths === 1 ||
       (snap.durationDays === 30 && !/\d+일/.test(snap.name ?? ''));
     if (!looksLikeMonthlyPlan) return s;
 
-    return { ...s, endAt: properEnd };
+    // 구 공식: durationDays=30 이면 startAt + 29일 (KST 자정 기준으로도 동일 — DST 없음).
+    const oldFormulaEnd = s.startAt + 29 * 86400000;
+    // 새 공식: 캘린더 1개월 - 1일 (KST 기준).
+    const newFormulaEnd = addMonthsKstClampedFix(s.startAt, 1) - 86400000;
+
+    if (s.endAt !== oldFormulaEnd) return s;                    // 구 공식 결과가 아니면 안 건드림 (수동 조정 등)
+    if (oldFormulaEnd === newFormulaEnd) return s;              // 이미 정합
+
+    return { ...s, endAt: newFormulaEnd };
   });
 }
 

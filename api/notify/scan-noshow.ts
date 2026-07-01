@@ -45,6 +45,11 @@ interface StudentLike {
 interface AttStateLike { state: 'in' | 'out' | 'temp_out' }
 interface AttendanceStateJson { state: Record<string, AttStateLike> }
 interface StudentsStateJson { list: StudentLike[] }
+interface PpurioSettingsJson {
+  channel?: 'sms' | 'kakao';
+  templateNoShow?: string;
+  notice?: string;
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -84,6 +89,10 @@ async function scanHandler(req: VercelRequest, res: VercelResponse) {
 
   const students = await readStore<StudentsStateJson>(db, 'pp.students.v1');
   const attendance = await readStore<AttendanceStateJson>(db, 'pp.attendance.v1');
+  const ppurio = await readStore<PpurioSettingsJson>(db, 'pp.ppurioSettings.v1');
+  const channel: 'sms' | 'kakao' = ppurio?.channel === 'kakao' ? 'kakao' : 'sms';
+  const templateCode = ppurio?.templateNoShow || undefined;
+  const notice = ppurio?.notice ?? '';
   if (!students || !Array.isArray(students.list)) {
     return res.status(200).json({ ok: true, scanned: 0, note: 'no students state' });
   }
@@ -146,8 +155,10 @@ async function scanHandler(req: VercelRequest, res: VercelResponse) {
         continue;
       }
 
-      // 미입실 — SMS 발송
-      const smsBody = `[합격공간] ${student.name ?? ''} 학생이 ${slot.time} ${slot.label} 예정이었으나 아직 미입실입니다.`;
+      // 미입실 — 알림톡/SMS 발송.
+      // 템플릿 변수: [*1*] = 입실 예정 시각 (slot.time), [*2*] = 공통 공지 (ppurio.notice).
+      // 알림톡 채널이고 templateCode 있으면 changeWord + templateCode 로 발송, 아니면 SMS fallback.
+      const smsBody = `[합격공간] ${student.name ?? ''} 학생이 ${slot.time} 입실 예정이었으나 아직 미입실입니다.${notice ? '\n\n' + notice : ''}`;
       try {
         const resp = await fetch(`${notifyBase}/api/notify/send`, {
           method: 'POST',
@@ -155,9 +166,11 @@ async function scanHandler(req: VercelRequest, res: VercelResponse) {
           body: JSON.stringify({
             to: student.parentPhone,
             name: student.name,
-            channel: 'sms',
+            channel,
             template: 'no_show',
             message: smsBody,
+            templateCode,
+            changeWord: { var1: slot.time, var2: notice },
           }),
         });
         const data = await resp.json().catch(() => ({}));

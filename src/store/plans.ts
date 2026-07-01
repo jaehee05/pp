@@ -83,9 +83,8 @@ const DEFAULT_PLANS: LocalPlan[] = [
     taxFreeAmount: 169670, taxableAmount: 320330, price: 490000, active: true, discountPolicy: '분두 비원생 정상가 (0%)' },
 ];
 
-// 레거시 durationDays(30/60/90/180/365) 가 이름에 "개월" 포함된 기간권에 박혀있으면
-// durationMonths 로 변환 (시작 월 마지막 날까지 캘린더 기준).
-// 이름이 "30일권" 같이 명시적이면 그대로 둠.
+// 레거시 durationDays(30/60/90/180/365) 는 캘린더 개월 이용권으로 간주해 durationMonths 변환.
+// 이름에 "일" 명시된 경우(예: "30일권") 만 스킵 — 그건 진짜 N일권 의도.
 function migrateMonthDuration(list: LocalPlan[]): LocalPlan[] {
   const dayToMonth: Record<number, number> = { 30: 1, 60: 2, 90: 3, 180: 6, 365: 12 };
   return list.map((p) => {
@@ -94,7 +93,8 @@ function migrateMonthDuration(list: LocalPlan[]): LocalPlan[] {
     if (p.durationDays == null) return p;
     const monthsMaybe = dayToMonth[p.durationDays];
     if (!monthsMaybe) return p;
-    if (!/개월|달/.test(p.name)) return p;
+    // "N일권/N일 단기/N일 특가" 등 명시적으로 N일 의도인 경우만 그대로 둠.
+    if (/\d+일/.test(p.name)) return p;
     const next: LocalPlan = { ...p, durationMonths: monthsMaybe };
     delete (next as { durationDays?: number }).durationDays;
     return next;
@@ -131,9 +131,11 @@ function migrateMonthlySubEndAt(subs: LocalSub[]): LocalSub[] {
     if (s.endAt !== oneDayBeforeLast) return s;                   // 끝-1일 패턴만
 
     const snap = s.planSnapshot ?? {} as LocalSub['planSnapshot'];
+    // 1개월 이용권 판단: durationMonths=1 이 정석. durationDays=30 도 (이름에 "N일"
+    // 명시된 경우 제외하고) 캘린더 1개월로 간주. 학원 도메인 상 30일 flat 이용권은 없음.
     const looksLikeMonthlyPlan =
       snap.durationMonths === 1 ||
-      (snap.durationDays === 30 && /개월|달/.test(snap.name ?? ''));
+      (snap.durationDays === 30 && !/\d+일/.test(snap.name ?? ''));
     if (!looksLikeMonthlyPlan) return s;
 
     return { ...s, endAt: properEnd };
@@ -265,6 +267,15 @@ export const usePlans = create<State>()(
     },
   ),
 );
+
+// 하이드레이션 완료 후 sub.endAt 마이그레이션이 무언가 바꿨을 수 있으므로 persist write 트리거.
+// **안전 가드**: subs 가 이미 비어있으면 (하이드레이션 실패해서 defaults 로 떨어졌거나 신규 매장)
+// setState 하지 않음 — 그래야 빈 상태로 Firestore 덮어쓰는 사고 (이전 데이터 손실 사고 원인) 재발 방지.
+usePlans.persist.onFinishHydration?.((hydrated) => {
+  const s = hydrated as Partial<State> | undefined;
+  if (!s || !Array.isArray(s.subs) || s.subs.length === 0) return;
+  usePlans.setState((prev) => ({ ...prev }));
+});
 
 // 외부(토스플레이스 웹훅 등)에서 appState/pp.plans.v1 을 직접 갱신했을 때 자동 rehydrate.
 subscribeExternalUpdates(STORE_NAME, () => usePlans.persist.rehydrate());

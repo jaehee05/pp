@@ -21,6 +21,24 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_023',
+    title: 'v1.0.23 — 1개월권 만료일 보정 확대 + 데이터 손실 방지 안전망',
+    date: '2026-07-01',
+    body: `## 사고 대응 (2026-07-01)
+- v1.0.22 에서 추가한 하이드레이션 후 자동 write 코드가 Firestore 읽기 실패(타임아웃) 시 초기 defaults 를 그대로 원본에 덮어써 subs/pays/pendingOrders 데이터 손실 발생.
+- 백업 (다른 브라우저 localStorage) 로 원상 복구 완료.
+
+## 재발 방지 안전망
+- \`plans\` 스토어 onFinishHydration setState 는 **subs.length > 0 일 때만** 발동. 빈 상태는 write 하지 않음.
+- \`firestoreStorage.setItem\` 이 defaults 처럼 보이는 payload (subs/pays/list/logs/seats 배열 전부 비어있음) 를 쓰려 할 때 Firestore 원본에 실 데이터가 있으면 **write 거부** — 로그 경고만 남기고 조용히 무시. 로컬 캐시도 안 건드림 (백업 소스 보호).
+
+## 마이그레이션 조건 확대
+- 1개월권 판단이 이름에 "개월/달" 포함으로 한정돼 있어, "분두 1과목 할인 (5%)" 같이 이름에 개월 안 들어간 30일 이용권들이 스킵되던 문제 수정.
+- 이제 \`durationDays === 30\` 이면 (이름에 "N일" 명시된 경우 제외) 모두 캘린더 1개월로 간주 → 시작 월 마지막 날까지 자동 보정.`,
+    createdAt: Date.parse('2026-07-01'),
+    updatedAt: Date.parse('2026-07-01'),
+  },
+  {
     slug: 'v1_022',
     title: 'v1.0.22 — 기존 1개월권 만료일 자동 보정',
     date: '2026-07-01',

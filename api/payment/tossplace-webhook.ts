@@ -112,6 +112,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       receivedAt: Date.now(),
       type: event.type,
       orderId: event.data?.payment?.orderId ?? null,
+      // 디버깅용: 전체 이벤트 페이로드 통째 저장 (Firestore 콘솔에서 바로 확인)
+      fullEvent: event,
+      rawBody: rawBody.slice(0, 10000), // 안전차원 raw 도 (10KB 컷)
+    });
+  } else {
+    // webhookId 없어도 (테스트 등) 디버그 로그는 남김.
+    await db.collection('tossplaceWebhooks').doc(`no-id-${Date.now()}`).set({
+      receivedAt: Date.now(),
+      type: event.type,
+      orderId: event.data?.payment?.orderId ?? null,
+      fullEvent: event,
+      rawBody: rawBody.slice(0, 10000),
     });
   }
 

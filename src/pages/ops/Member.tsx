@@ -5,7 +5,6 @@ import { Modal } from '../../components/Modal';
 import { useStudents } from '../../store/students';
 import { useAttendance } from '../../store/attendance';
 import { usePlans } from '../../store/plans';
-import { deviceAgent } from '../../lib/deviceAgent';
 import { fmtDateTime, fmtMoney, toLocalISODate, fromLocalISODate } from '../../lib/format';
 import { currentSubOf, lastActiveEndOf, nextDayStart, computeEndAt } from '../../lib/sub';
 import { useSeats, seatOfStudent, assignSeatToStudent } from '../../lib/useSeats';
@@ -80,7 +79,6 @@ export function OpsMember() {
     setDraft((prev) => ({ ...prev, [k]: val }));
   const [memo, setMemo] = useState(student?.memo ?? '');
   const [tab, setTab] = useState<LogTab>('member');
-  const [enrolling, setEnrolling] = useState(false);
 
   // 이용권 선택
   const [planSeatType, setPlanSeatType] = useState<'' | 'fixed' | 'free'>('');
@@ -110,16 +108,6 @@ export function OpsMember() {
     setSeatPickOpen(true);
   }
 
-  useEffect(() => {
-    const off = deviceAgent.on((e) => {
-      if (e.type === 'fingerprint_enroll_done' && student) {
-        update(student.id, { fingerprintId: e.fingerprintId });
-        setEnrolling(false);
-        alert('지문 등록 완료');
-      }
-    });
-    return () => { off(); };
-  }, [student, update]);
 
   if (!student) {
     return (
@@ -171,12 +159,6 @@ export function OpsMember() {
     if (!confirm('일정표 전체를 비울까요?')) return;
     setWeeklyDraft({});
   }
-  function startEnroll() {
-    if (!student) return;
-    setEnrolling(true);
-    deviceAgent.send({ id: `e_${student.id}`, cmd: 'enroll_fingerprint', studentId: student.id });
-  }
-  function deleteFp() { if (student && confirm('지문을 삭제할까요?')) update(student.id, { fingerprintId: '' }); }
 
   // 좌석타입 + 숨김 + 할인 등급 + 노출 월 필터 적용된 이용권 후보
   // 월 필터 기준일: 이 학생이 이 이용권을 산다면 "시작될" 날짜.
@@ -631,17 +613,11 @@ export function OpsMember() {
                 );
               })()}
             </Field>
-            <Field label="" col={2}>
-              <button className="rounded-md bg-white px-3 py-1.5 text-sm ring-1 ring-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={student.fingerprintId ? deleteFp : startEnroll} disabled={enrolling || editMode}>
-                {student.fingerprintId ? '◉ 지문삭제' : enrolling ? '대기 중…' : '◯ 지문등록'}
-              </button>
-            </Field>
             <Field label="PIN번호" col={4}>
               <input className="input font-mono" maxLength={4} value={v?.pin ?? ''} readOnly={!editMode}
                 onChange={(e) => setDraftField('pin', e.target.value.replace(/\D/g, '').slice(0, 4))} />
             </Field>
-            <div className="col-span-4" />
+            <div className="col-span-6" />
 
             <Field label="생년월일" col={4}>
               <input className="input" type="date" value={v?.birthYmd ?? ''} readOnly={!editMode}

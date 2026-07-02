@@ -17,7 +17,6 @@ export interface Account {
 
   // 키오스크 출입용 (관리자도 출퇴근 기록 가능)
   kioskPin?: string;            // 4자리 PIN
-  fingerprintId?: string;       // BioStar 사용자 ID
   enableKioskAccess?: boolean;  // 키오스크 출입 허용 (기본 true)
 }
 

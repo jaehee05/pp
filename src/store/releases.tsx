@@ -21,6 +21,26 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_029',
+    title: 'v1.0.29 — 지문 인증 전면 제거 (PIN 4자리만 유지)',
+    date: '2026-07-02',
+    body: `## 제거
+- **지문 인증 관련 코드 전면 삭제**. 키오스크 출입은 **PIN 4자리 (연락처 뒷자리)** 만 사용.
+- 제거 대상:
+  - \`Student.fingerprintId\`, \`Account.fingerprintId\` 필드
+  - \`AttendanceLog.source\` 에서 \`'fingerprint'\` 제거, \`'pin'\` 추가
+  - \`deviceAgent\` 의 \`fingerprint_*\` 이벤트 + \`enroll_fingerprint\` / \`identify_fingerprint\` 명령 + mock 시뮬레이션
+  - Member.tsx / Register.tsx / StudentDetail.tsx / Account.tsx 의 지문 등록·삭제 UI + 이벤트 리스너
+  - Kiosk.tsx 의 지문 스캔 리스너 + agentConnected 상태 + 하단 지문 인식기 상태 표시
+  - MemberPanel.tsx 의 지문 뱃지
+- deviceAgent 는 카드결제 이벤트만 남김.
+
+## 이유
+- 실운영에서 지문 인식기 (BioStar/BioMini) 도입·유지 오버헤드 대비 이점 적음. PIN 4자리로 충분.`,
+    createdAt: Date.parse('2026-07-02'),
+    updatedAt: Date.parse('2026-07-02'),
+  },
+  {
     slug: 'v1_028',
     title: 'v1.0.28 — 페이스패스 제거 (키오스크 PIN 만 유지)',
     date: '2026-07-02',

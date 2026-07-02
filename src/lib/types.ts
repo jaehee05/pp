@@ -34,9 +34,6 @@ export interface Student {
   // schedule 필드와 별개 — 이건 학생이 스스로 등록하는 세부 시간표.
   weeklyPlan?: Partial<Record<WeekdayKey, DayPlan>>;
 
-  // 지문 ID (디바이스 에이전트에서 발급)
-  fingerprintId?: string;
-
   // 좌석/이용권은 다른 컬렉션에서 조회
   // 'active' = 정상회원, 'leaving' = 퇴원 예정 (배치도에 표시), 'paused' = 일시정지, 'left' = 퇴실
   status: 'active' | 'leaving' | 'paused' | 'left';
@@ -152,7 +149,7 @@ export interface AttendanceLog {
   id: ID;
   studentId: ID;
   type: 'enter' | 'exit' | 'leave_temp' | 'return';
-  source: 'fingerprint' | 'manual' | 'qr';
+  source: 'manual' | 'qr' | 'pin';
   at: TS;
   seatId?: ID;
   byUserId?: ID;       // 수동 처리한 운영자

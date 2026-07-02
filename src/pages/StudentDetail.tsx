@@ -1,34 +1,17 @@
-import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { PageHeader } from '../components/PageHeader';
 import { useStudents } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePoints } from '../store/points';
 import { usePlans } from '../store/plans';
-import { deviceAgent } from '../lib/deviceAgent';
 import { fmtDateTime, fmtPhone } from '../lib/format';
 
 export function StudentDetailPage() {
   const { id = '' } = useParams();
   const student = useStudents((s) => s.get(id));
-  const updateStudent = useStudents((s) => s.update);
   const attLogs = useAttendance((s) => s.logs.filter((l) => l.studentId === id));
   const points = usePoints((s) => s.entries.filter((e) => e.studentId === id));
   const subs = usePlans((s) => s.subs.filter((x) => x.studentId === id));
-
-  const [enroll, setEnroll] = useState<{ step: number; total: number } | null>(null);
-
-  useEffect(() => {
-    const off = deviceAgent.on((e) => {
-      if (e.type === 'fingerprint_enroll_progress') setEnroll({ step: e.step, total: e.total });
-      if (e.type === 'fingerprint_enroll_done') {
-        setEnroll(null);
-        if (student) updateStudent(student.id, { fingerprintId: e.fingerprintId });
-        alert('지문 등록 완료');
-      }
-    });
-    return () => { off(); };
-  }, [student, updateStudent]);
 
   if (!student) {
     return (
@@ -37,12 +20,6 @@ export function StudentDetailPage() {
         <div className="p-6"><Link to="/students" className="text-brand-600 hover:underline">← 학생 목록</Link></div>
       </>
     );
-  }
-
-  function startEnroll() {
-    if (!student) return;
-    setEnroll({ step: 0, total: 3 });
-    deviceAgent.send({ id: `e_${student.id}`, cmd: 'enroll_fingerprint', studentId: student.id });
   }
 
   const pointTotal = points.reduce((a, e) => a + e.delta, 0);
@@ -57,16 +34,13 @@ export function StudentDetailPage() {
 
       <div className="grid grid-cols-1 gap-4 p-6 lg:grid-cols-3">
         <div className="card p-5">
-          <div className="text-sm font-semibold text-slate-700">지문 등록</div>
+          <div className="text-sm font-semibold text-slate-700">PIN</div>
           <p className="mt-1 text-xs text-slate-500">
-            현재: {student.fingerprintId ? <span className="font-mono text-emerald-700">{student.fingerprintId.slice(0, 16)}…</span> : <span className="text-slate-400">미등록</span>}
+            현재: {student.pin ? <span className="font-mono text-emerald-700">{student.pin}</span> : <span className="text-slate-400">미설정</span>}
           </p>
-          <button className="btn-primary mt-3 w-full" onClick={startEnroll} disabled={!!enroll}>
-            {enroll ? `등록 중… ${enroll.step}/${enroll.total}` : '+ 지문 등록 시작'}
-          </button>
-          {student.fingerprintId && (
-            <button className="btn-secondary mt-2 w-full" onClick={() => updateStudent(student.id, { fingerprintId: '' })}>지문 삭제</button>
-          )}
+          <p className="mt-3 text-[11px] text-slate-400">
+            회원등록 시 연락처 뒷 4자리로 자동 설정됩니다. 회원 정보에서 수정 가능.
+          </p>
         </div>
 
         <div className="card p-5">

@@ -81,7 +81,6 @@ export function MemberPanel({ onClose }: { onClose?: () => void } = {}) {
                       <span className={s.gender === 'M' ? 'text-sky-500' : s.gender === 'F' ? 'text-pink-500' : 'text-slate-300'}>
                         {s.gender === 'M' ? '♂' : s.gender === 'F' ? '♀' : '·'}
                       </span>
-                      {s.fingerprintId && <span className="text-rose-500" title="지문 등록됨">◉</span>}
                       <span className="ml-auto text-[11px] text-slate-400">성인</span>
                     </div>
                     {sub && (

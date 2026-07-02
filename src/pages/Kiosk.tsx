@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { deviceAgent, type DeviceEvent } from '../lib/deviceAgent';
 import { useStudents, type LocalStudent } from '../store/students';
 import { useAttendance } from '../store/attendance';
 import { usePlans } from '../store/plans';
@@ -26,7 +25,6 @@ export function KioskPage() {
   const subs = usePlans((s) => s.subs);
   const { brand, storeName } = useBranding();
 
-  const [agentConnected, setAgentConnected] = useState(false);
   const [pin, setPin] = useState('');
   const [screen, setScreen] = useState<Screen>({ kind: 'idle' });
   const [now, setNow] = useState(() => new Date());
@@ -38,23 +36,6 @@ export function KioskPage() {
     return () => clearInterval(t);
   }, []);
 
-  // 디바이스 에이전트 (지문기 — BioStar 연결 시) 이벤트
-  useEffect(() => {
-    const off = deviceAgent.on((e: DeviceEvent) => {
-      if (e.type === 'connected') setAgentConnected(true);
-      else if (e.type === 'disconnected') setAgentConnected(false);
-      else if (e.type === 'fingerprint_scan') {
-        // BioStar 사용자 ID 매칭: 학생 우선, 없으면 관리자
-        const s = students.find((x) => x.fingerprintId === e.fingerprintId);
-        if (s) { processStudent({ kind: 'student', data: s }); return; }
-        const a = accounts.find((x) => x.fingerprintId === e.fingerprintId);
-        if (a && a.enableKioskAccess !== false) processStudent({ kind: 'admin', data: a });
-      }
-    });
-    deviceAgent.connect();
-    return () => { off(); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, accounts]);
 
   // 아이들 자동 리셋
   function resetIdleTimer() {
@@ -87,7 +68,7 @@ export function KioskPage() {
     const recordId = p.kind === 'admin' ? `admin_${p.data.id}` : p.data.id;
     const cur = att.state[recordId];
     if (cur?.state === 'temp_out') {
-      att.returnFromTemp(recordId, 'fingerprint');
+      att.returnFromTemp(recordId, 'pin');
       setScreen({ kind: 'done', person: p, action: '복귀' });
       setPin('');
       window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
@@ -98,7 +79,7 @@ export function KioskPage() {
       setPin('');
       return;
     }
-    att.enter(recordId, 'fingerprint');
+    att.enter(recordId, 'pin');
     setScreen({ kind: 'done', person: p, action: '입실' });
     setPin('');
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
@@ -153,13 +134,13 @@ export function KioskPage() {
   function recordIdOf(p: Person) { return p.kind === 'admin' ? `admin_${p.data.id}` : p.data.id; }
   function doExit() {
     if (screen.kind !== 'pickAction') return;
-    att.exit(recordIdOf(screen.person), 'fingerprint');
+    att.exit(recordIdOf(screen.person), 'pin');
     setScreen({ kind: 'done', person: screen.person, action: '퇴실' });
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
   function doTempOut() {
     if (screen.kind !== 'pickAction') return;
-    att.leaveTemp(recordIdOf(screen.person), 'fingerprint');
+    att.leaveTemp(recordIdOf(screen.person), 'pin');
     setScreen({ kind: 'done', person: screen.person, action: '외출' });
     window.setTimeout(() => setScreen({ kind: 'idle' }), DONE_TIMEOUT_MS);
   }
@@ -203,7 +184,7 @@ export function KioskPage() {
       {/* 메인 */}
       <main className="flex flex-1 items-center justify-center px-4 py-8">
         {screen.kind === 'idle' && (
-          <IdleScreen pin={pin} onKey={pressKey} agentConnected={agentConnected} />
+          <IdleScreen pin={pin} onKey={pressKey} />
         )}
         {screen.kind === 'pickAction' && (
           <PickActionScreen person={screen.person} onExit={doExit} onTemp={doTempOut} onCancel={cancel} />
@@ -218,9 +199,7 @@ export function KioskPage() {
 
       {/* 하단 상태바 */}
       <footer className="border-t border-white/10 px-6 py-2 text-xs text-slate-500">
-        <span className={`mr-1 inline-block h-2 w-2 rounded-full ${agentConnected ? 'bg-emerald-400' : 'bg-rose-500'}`} />
-        지문 인식기 {agentConnected ? '연결됨' : '미연결 (PIN 사용)'}
-        <span className="ml-4 text-slate-600">PIN 4자리 입력 또는 지문 인식</span>
+        PIN 4자리 (연락처 뒷자리) 입력
       </footer>
     </div>
   );
@@ -228,7 +207,7 @@ export function KioskPage() {
 
 // ====================== 화면들 ======================
 
-function IdleScreen({ pin, onKey, agentConnected }: { pin: string; onKey: (k: string) => void; agentConnected: boolean }) {
+function IdleScreen({ pin, onKey }: { pin: string; onKey: (k: string) => void }) {
   const KEYS: { label: string; val: string; cls?: string }[] = [
     { label: '1', val: '1' }, { label: '2', val: '2' }, { label: '3', val: '3' },
     { label: '4', val: '4' }, { label: '5', val: '5' }, { label: '6', val: '6' },
@@ -241,7 +220,7 @@ function IdleScreen({ pin, onKey, agentConnected }: { pin: string; onKey: (k: st
     <div className="flex w-full max-w-md flex-col items-center">
       <h1 className="mb-3 text-3xl font-bold">PIN을 눌러주세요</h1>
       <p className="mb-6 text-sm text-slate-400">
-        {agentConnected ? '지문 인식기에 손가락을 올려도 됩니다' : '회원 등록 시 받은 PIN 4자리를 입력하세요'}
+        연락처 뒷 4자리 PIN 을 입력하세요
       </p>
 
       <div className="mb-8 flex gap-3">

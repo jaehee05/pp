@@ -2,14 +2,11 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
 import { useStudents, emptyStudent } from '../../store/students';
-import { deviceAgent } from '../../lib/deviceAgent';
 
 export function OpsRegister() {
   const add = useStudents((s) => s.add);
-  const update = useStudents((s) => s.update);
   const nav = useNavigate();
   const [v, setV] = useState(emptyStudent());
-  const [enrolling, setEnrolling] = useState(false);
   const [newId, setNewId] = useState<string | null>(null);
   // PIN 을 직접 입력한 적 있는지. false 면 phone 뒷 4자리로 자동 동기화.
   const [pinTouched, setPinTouched] = useState(false);
@@ -32,22 +29,7 @@ export function OpsRegister() {
     if (!v.pin || v.pin.length !== 4) return alert('PIN번호 4자리를 입력하세요.');
     const id = add(v);
     setNewId(id);
-    alert('회원 등록 완료. 지문 등록을 진행하려면 "지문 등록" 버튼을 누르세요.');
-  }
-
-  function enrollFp() {
-    const id = newId;
-    if (!id) return alert('먼저 회원 등록을 완료하세요.');
-    setEnrolling(true);
-    const off = deviceAgent.on((e) => {
-      if (e.type === 'fingerprint_enroll_done') {
-        update(id, { fingerprintId: e.fingerprintId });
-        setEnrolling(false);
-        off();
-        alert('지문 등록 완료');
-      }
-    });
-    deviceAgent.send({ id: `e_${id}`, cmd: 'enroll_fingerprint', studentId: id });
+    alert('회원 등록 완료.');
   }
 
   return (
@@ -77,14 +59,6 @@ export function OpsRegister() {
               </label>
             </Field>
 
-            <Field label="지문" col={6}>
-              <div className="flex h-9 items-center gap-2">
-                <button className="btn-secondary" disabled={!newId || enrolling} onClick={enrollFp}>
-                  {enrolling ? '지문 인식 대기 중…' : '지문 등록'}
-                </button>
-                <span className="text-xs text-slate-500">{newId ? '회원 등록 후 진행 가능' : '회원등록을 해주세요.'}</span>
-              </div>
-            </Field>
             <Field label="PIN번호" required col={6}>
               <input className="input" maxLength={4} placeholder="4자리 (연락처 뒷자리 자동)" value={v.pin}
                 onChange={(e) => updatePin(e.target.value)} />

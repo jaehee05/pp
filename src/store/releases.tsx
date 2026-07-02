@@ -21,6 +21,26 @@ interface State {
 
 const SEED: Release[] = [
   {
+    slug: 'v1_028',
+    title: 'v1.0.28 — 페이스패스 제거 (키오스크 PIN 만 유지)',
+    date: '2026-07-02',
+    body: `## 제거
+- **페이스패스 (Toss FacePass) 관련 코드 전면 삭제**. 출입 인증은 키오스크 PIN 4자리(연락처 뒷자리) 흐름만 유지.
+- 제거 대상:
+  - \`Student.faceId\` 필드
+  - \`AttendanceLog.source\` 의 \`'face'\` 값
+  - \`/api/facepass/enroll\`, \`/api/facepass/identify\` 두 서버리스 함수
+  - \`deviceAgent\` 의 \`enroll_face\` / \`identify_face\` 메시지 + mock 시뮬레이션
+  - 회원정보 페이지의 [😊 페이스패스 등록/삭제] 버튼 + 관련 state/함수
+  - \`.env.example\` 의 \`FACEPASS_CALLBACK_SECRET\`
+- 기존 학생 데이터에 이미 \`faceId\` 가 채워져 있어도 무시됨 — 스토리지에 남지만 앱은 안 봄.
+
+## 이유
+- 토스 Front Plugin SDK 는 별도 물리 단말(키오스크) + 파트너 도입 절차가 필요해 실제 도입까지 오래 걸림. 현재 흐름 (연락처 뒷 4자리 PIN 을 키오스크에서 입력) 만으로 충분.`,
+    createdAt: Date.parse('2026-07-02'),
+    updatedAt: Date.parse('2026-07-02'),
+  },
+  {
     slug: 'v1_027',
     title: 'v1.0.27 — 미입실 자동 스캔 + weeklyPlan 4개 슬롯 알림',
     date: '2026-07-02',

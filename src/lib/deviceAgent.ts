@@ -9,19 +9,12 @@ export type DeviceEvent =
   | { type: 'fingerprint_enroll_progress'; step: number; total: number }
   | { type: 'fingerprint_enroll_done'; fingerprintId: string }
   | { type: 'fingerprint_enroll_failed'; error: string }
-  // 페이스패스 — 보통 토스 Front 단말 plugin → 서버 → Firestore 흐름이라 deviceAgent 가
-  // 직접 받지는 않지만, 같은 LAN 의 키오스크가 ws 로 알려주는 케이스에 대비해 타입 정의.
-  | { type: 'face_identify'; faceId: string; quality?: number }
-  | { type: 'face_enroll_done'; faceId: string; studentId?: string }
-  | { type: 'face_enroll_failed'; error: string }
   | { type: 'card_payment_result'; ok: boolean; approvalNo?: string; issuer?: string; txId?: string; error?: string }
   | { type: 'device_list'; devices: { id: string; name: string; status?: string }[] };
 
 export type AgentRequest =
   | { id: string; cmd: 'enroll_fingerprint'; studentId: string; studentName?: string; deviceId?: string }
   | { id: string; cmd: 'identify_fingerprint' }
-  | { id: string; cmd: 'enroll_face'; studentId: string; studentName?: string }
-  | { id: string; cmd: 'identify_face' }
   | { id: string; cmd: 'list_devices' }
   | { id: string; cmd: 'card_pay'; amount: number; installment?: number; orderId: string; merchant?: 'main' | 'sub' }
   | { id: string; cmd: 'card_cancel'; approvalNo: string; amount: number };
@@ -118,22 +111,6 @@ class DeviceAgent {
         fingerprintId: 'fp_mock_demo',
         quality: 88,
       }), 800);
-    }
-    if (req.cmd === 'enroll_face') {
-      // 토스 FacePass 등록은 실제로는 단말의 in-app webview 안에서 진행됨.
-      // mock 으로는 짧은 지연 후 ID 발급해 등록 완료로 시뮬레이션.
-      setTimeout(() => this.emit({
-        type: 'face_enroll_done',
-        faceId: `face_${req.studentId}_${Date.now()}`,
-        studentId: req.studentId,
-      }), 1200);
-    }
-    if (req.cmd === 'identify_face') {
-      setTimeout(() => this.emit({
-        type: 'face_identify',
-        faceId: 'face_mock_demo',
-        quality: 95,
-      }), 700);
     }
     if (req.cmd === 'card_pay') {
       setTimeout(() => this.emit({

@@ -75,7 +75,7 @@ export const useStudents = create<State>()(
   ),
 );
 
-// 외부(페이스패스 등록 콜백 등)에서 appState/pp.students.v1 직접 갱신 시 자동 rehydrate.
+// 외부에서 appState/pp.students.v1 직접 갱신 시 자동 rehydrate (webhook 등).
 subscribeExternalUpdates(STORE_NAME, () => useStudents.persist.rehydrate());
 
 export function emptyStudent(): Omit<LocalStudent, 'id' | 'joinedAt' | 'pointsTotal'> {

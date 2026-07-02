@@ -36,9 +36,6 @@ export interface Student {
 
   // 지문 ID (디바이스 에이전트에서 발급)
   fingerprintId?: string;
-  // 페이스패스(Toss FacePass) ID — 토스 Front Plugin enroll 완료 콜백으로 채워짐.
-  // 학생이 본인 휴대폰 토스 앱 또는 가맹점 키오스크(Toss Front 단말)에서 얼굴 등록 시 발급.
-  faceId?: string;
 
   // 좌석/이용권은 다른 컬렉션에서 조회
   // 'active' = 정상회원, 'leaving' = 퇴원 예정 (배치도에 표시), 'paused' = 일시정지, 'left' = 퇴실
@@ -155,7 +152,7 @@ export interface AttendanceLog {
   id: ID;
   studentId: ID;
   type: 'enter' | 'exit' | 'leave_temp' | 'return';
-  source: 'fingerprint' | 'manual' | 'qr' | 'face';
+  source: 'fingerprint' | 'manual' | 'qr';
   at: TS;
   seatId?: ID;
   byUserId?: ID;       // 수동 처리한 운영자

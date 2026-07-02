@@ -77,5 +77,5 @@ export const useAttendance = create<State>()(
   ),
 );
 
-// 외부(페이스패스 식별 콜백 등)에서 appState/pp.attendance.v1 직접 갱신 시 자동 rehydrate.
+// 외부에서 appState/pp.attendance.v1 직접 갱신 시 자동 rehydrate (webhook 등).
 subscribeExternalUpdates(STORE_NAME, () => useAttendance.persist.rehydrate());

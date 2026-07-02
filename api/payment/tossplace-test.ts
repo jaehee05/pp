@@ -37,10 +37,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
-  // 가장 무해한 endpoint 로 credentials 만 검증 — 존재하지 않는 orderId 로 결제 조회 시도.
-  // 인증 실패면 401/403, 인증 성공하지만 데이터 없으면 200 (empty array) 또는 4xx.
-  const testOrderId = `probe-${Date.now().toString(36)}`;
-  const url = `${base}/merchants/${encodeURIComponent(merchantId)}/payment/payments/by-order-id?orderId=${encodeURIComponent(testOrderId)}`;
+  // 가장 무해한 endpoint 로 credentials 만 검증 — 존재하지 않는 orderId (숫자) 로 결제 조회.
+  // 토스플레이스 orderId 는 Java long — 큰 소수 하나 넣어 존재 안 하는 걸 유도.
+  // 인증 실패면 401/403, 인증 성공하지만 데이터 없으면 200/success=[].
+  const testOrderId = '99999999999999';
+  const url = `${base}/merchants/${encodeURIComponent(merchantId)}/payment/payments/by-order-id?orderId=${testOrderId}`;
 
   try {
     const resp = await fetch(url, {
